@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+#include "video_core/renderer_vulkan/vk_recording_observer.h"
+
 #include "video_core/renderer_vulkan/vk_scene_resolution.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
@@ -258,6 +260,7 @@ void SceneTargets::Resample(vk::Image src, vk::Image dst, const VideoCore::Image
             stencil_attachment.loadOp = vk::AttachmentLoadOp::eClear;
             stencil_attachment.clearValue.depthStencil = vk::ClearDepthStencilValue{0.f, 0};
         }
+        Vulkan::ObserveRenderBegin(cmd, __func__);
         cmd.beginRendering({
             .renderArea = {{0, 0}, dst_size}, .layerCount = 1,
             .pDepthAttachment = &attachment,
@@ -294,6 +297,7 @@ void SceneTargets::Resample(vk::Image src, vk::Image dst, const VideoCore::Image
         } else {
             cmd.draw(3, 1, 0, 0);
         }
+        Vulkan::ObserveRenderEnd(cmd, __func__);
         cmd.endRendering();
     });
     // The guest pipelines' dynamic state must be emitted again after this pipeline.

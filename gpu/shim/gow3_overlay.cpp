@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+#include "video_core/renderer_vulkan/vk_recording_observer.h"
+
 #include "gow3_overlay.h"
 #include "gow3_pad_input.h"
 
@@ -1366,6 +1368,7 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
         .loadOp = vk::AttachmentLoadOp::eLoad,
         .storeOp = vk::AttachmentStoreOp::eStore,
     };
+    Vulkan::ObserveRenderBegin(cmdbuf, __func__);
     cmdbuf.beginRendering(vk::RenderingInfo{
         .renderArea = {{0, 0}, extent},
         .layerCount = 1,
@@ -1377,6 +1380,7 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
         std::scoped_lock submit_lock{Vulkan::Scheduler::submit_mutex};
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdbuf);
     }
+    Vulkan::ObserveRenderEnd(cmdbuf, __func__);
     cmdbuf.endRendering();
 }
 

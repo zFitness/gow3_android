@@ -26,6 +26,7 @@
 #include "video_core/amdgpu/regs_primitive.h"
 #include "video_core/renderer_vulkan/vk_resource_pool.h"
 #include "video_core/renderer_vulkan/vk_semaphore.h"
+#include "video_core/renderer_vulkan/vk_recording_observer.h"
 
 namespace tracy {
 class VkCtxScope;
@@ -732,14 +733,21 @@ public:
     /// recording this first waits until all commands passed to Record() are recorded, then
     /// records directly (Record() included, so callers may mix both) until the next
     /// KickRecording() or submission.
-    [[gnu::noinline]] vk::CommandBuffer CommandBuffer() {
+    [[gnu::noinline]] ObservedCommandBuffer CommandBuffer(
+        std::source_location caller = std::source_location::current()) {
+        const auto producer = ObserveProducer("CommandBuffer");
         if (recording_threaded && !direct_mode) {
             SyncRecording();
             direct_mode = true;
             direct_recordings.fetch_add(1, std::memory_order_relaxed);
             TraceDirectRecording(__builtin_return_address(0));
         }
-        return current_cmdbuf;
+        return {current_cmdbuf, caller.function_name()};
+    }
+
+    [[nodiscard]] RecordingDiagnostics::Scope ObserveProducer(const char* entry) {
+        return {RecordingDiagnostics::Get(), RecordingDiagnostics::Kind::Producer,
+                {reinterpret_cast<uintptr_t>(this), 0}, entry};
     }
 
     /// GOW3_RECORDER_TRACE=1: prints the most frequent CommandBuffer() callers every 2000 calls.
@@ -749,13 +757,16 @@ public:
     /// everything it uses (capture by value): it may run later on the recording thread.
     template <typename Func>
     void Record(Func&& func) {
+        const auto producer = ObserveProducer("Record");
         if (!recording_threaded || direct_mode) {
+            const auto recording = ObserveRecording(current_cmdbuf, "Record(immediate)");
             func(current_cmdbuf);
             return;
         }
         if (Gow3Toggle::Disabled(Gow3Toggle::ThreadedRecording)) {
             SyncRecording();
             direct_mode = true;
+            const auto recording = ObserveRecording(current_cmdbuf, "Record(toggle-direct)");
             func(current_cmdbuf);
             return;
         }
@@ -775,6 +786,7 @@ public:
     /// Makes room for `bytes` of RecordData() plus the command that uses them in the current
     /// chunk: data and command must share a chunk, which is recycled once executed.
     void ReserveRecordData(size_t bytes) {
+        const auto producer = ObserveProducer("ReserveRecordData");
         if (!IsRecordingDeferred()) {
             return;
         }
@@ -788,6 +800,7 @@ public:
     /// been recorded (the same chunk). With threaded recording off, returns `data` itself.
     template <typename T>
     std::span<const T> RecordData(std::span<const T> data) {
+        const auto producer = ObserveProducer("RecordData");
         if (!IsRecordingDeferred() || data.empty()) {
             return data;
         }

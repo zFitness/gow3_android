@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "video_core/renderer_vulkan/vk_recording_observer.h"
+
 #include "common/debug.h"
 #include "common/elf_info.h"
 #include "common/io_file.h"
@@ -595,7 +597,10 @@ Frame* Presenter::PrepareBlankFrame(bool present_thread) {
         .pImageMemoryBarriers = &pre_barrier,
     });
 
+    Vulkan::ObserveRenderBegin(cmdbuf, __func__);
+
     cmdbuf.beginRendering(rendering_info);
+    Vulkan::ObserveRenderEnd(cmdbuf, __func__);
     cmdbuf.endRendering();
 
     cmdbuf.pipelineBarrier2(vk::DependencyInfo{

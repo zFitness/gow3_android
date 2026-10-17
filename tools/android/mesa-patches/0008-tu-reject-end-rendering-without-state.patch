@@ -1,0 +1,39 @@
+From: Gow3 Android maintainers
+Subject: [PATCH] freedreno: reject EndRendering with missing render pass state
+
+Local Gow3 Android increment, not a fexdroid-derived patch.
+SPDX-License-Identifier: MIT
+Based on Mesa main 35b085c4c067f198ce0b6437d94678e47b9c645f and
+mesa-unified gen8 9c7e022677dfa3abb356c2b6732cbd2e25783d01.
+
+Reject the complete EndRendering command before any resolve, command stream
+finalization, rendering or state reset. Log buffer identity, pass index and
+thread; this is containment, not a fix for the caller's invalid recording.
+
+--- a/src/freedreno/vulkan/tu_cmd_buffer.cc
++++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
+@@ -8,6 +8,8 @@
+  */
+ 
+ #include "tu_cmd_buffer.h"
++
++#include <unistd.h>
+ 
+ #include "vk_common_entrypoints.h"
+ #include "vk_log.h"
+@@ -10154,5 +10156,15 @@
+ {
+    VK_FROM_HANDLE(tu_cmd_buffer, cmd_buffer, commandBuffer);
+ 
++   /* 缺失状态时放弃整个结束命令，避免继续执行依赖活动渲染范围的收尾。 */
++   if (!cmd_buffer->state.pass || !cmd_buffer->state.subpass) {
++      mesa_logw("GOW3 renderpass state missing: cmd=%p renderpass=%u tid=%ld "
++                "pass=%p subpass=%p; EndRendering discarded",
++                (void *) cmd_buffer, cmd_buffer->state.total_renderpasses,
++                (long) gettid(), (const void *) cmd_buffer->state.pass,
++                (const void *) cmd_buffer->state.subpass);
++      return;
++   }
++
+    if (cmd_buffer->state.suspending) {
+       cmd_buffer->state.suspended_pass.lrz = cmd_buffer->state.lrz;

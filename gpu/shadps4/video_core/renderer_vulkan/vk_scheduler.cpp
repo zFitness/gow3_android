@@ -110,6 +110,8 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
     };
 
     if (!recording_threaded) {
+        const auto recording = ObserveRecording(current_cmdbuf, "BeginRendering(immediate)");
+        ObserveRenderBegin(current_cmdbuf, "Scheduler::BeginRendering");
         current_cmdbuf.beginRendering(rendering_info);
         return;
     }
@@ -123,6 +125,7 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
         if (info.pStencilAttachment) {
             info.pStencilAttachment = &stencil_attachment;
         }
+        ObserveRenderBegin(cmdbuf, "Scheduler::BeginRendering");
         cmdbuf.beginRendering(info);
     });
 }
@@ -132,7 +135,10 @@ void Scheduler::EndRendering() {
         return;
     }
     is_rendering = false;
-    Record([](vk::CommandBuffer cmdbuf) { cmdbuf.endRendering(); });
+    Record([](vk::CommandBuffer cmdbuf) {
+        ObserveRenderEnd(cmdbuf, "Scheduler::EndRendering");
+        cmdbuf.endRendering();
+    });
 }
 
 void Scheduler::TraceDirectRecording(void* caller) {
@@ -228,6 +234,7 @@ void Scheduler::WaitHostCopies() {
 }
 
 void Scheduler::KickRecording(bool force) {
+    const auto producer = ObserveProducer("KickRecording");
     if (!recording_threaded) {
         return;
     }
@@ -308,7 +315,10 @@ void Scheduler::RecorderThread(std::stop_token stoken) {
             recorder_busy = true;
         }
         // current_cmdbuf only changes after SyncRecording(), which waits for this thread.
-        chunk->Execute(current_cmdbuf);
+        {
+            const auto recording = ObserveRecording(current_cmdbuf, "VkRecorder::Execute");
+            chunk->Execute(current_cmdbuf);
+        }
         {
             std::scoped_lock lk{recorder_mutex};
             free_chunks.push_back(std::move(chunk));
@@ -398,6 +408,8 @@ void Scheduler::AllocateWorkerCommandBuffers() {
     };
 
     current_cmdbuf = command_pool.Commit();
+    RecordingDiagnostics::Get().NewSequence(RecordingBufferId(current_cmdbuf));
+    const auto recording = ObserveRecording(current_cmdbuf, "AllocateWorkerCommandBuffers");
     Check(current_cmdbuf.begin(begin_info));
 
     // Invalidate dynamic state so it gets applied to the new command buffer.
@@ -437,6 +449,8 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     SyncRecording();
     // Guest memory copies into staging read by this submission (copy threads).
     WaitHostCopies();
+    RecordingDiagnostics::Get().EndSequence(RecordingBufferId(current_cmdbuf));
+    const auto recording = ObserveRecording(current_cmdbuf, "SubmitExecution(end)");
     Check(current_cmdbuf.end());
 
     const vk::Semaphore timeline = work_semaphore.Handle();

@@ -1,6 +1,8 @@
 //  SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 //  SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "video_core/renderer_vulkan/vk_recording_observer.h"
+
 #include "video_core/renderer_vulkan/host_passes/pp_pass.h"
 
 #include "common/assert.h"
@@ -254,8 +256,11 @@ void PostProcessingPass::Render(vk::CommandBuffer cmdbuf, vk::ImageView input,
     cmdbuf.pushConstants(*pipeline_layout, vk::ShaderStageFlagBits::eFragment, 0, sizeof(Settings),
                          &settings);
 
+    Vulkan::ObserveRenderBegin(cmdbuf, __func__);
+
     cmdbuf.beginRendering(rendering_info);
     cmdbuf.draw(3, 1, 0, 0);
+    Vulkan::ObserveRenderEnd(cmdbuf, __func__);
     cmdbuf.endRendering();
 
     const auto post_barrier = vk::ImageMemoryBarrier2{
