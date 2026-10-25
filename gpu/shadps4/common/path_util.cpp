@@ -88,8 +88,8 @@ static auto UserPaths = [] {
     // spartanport: the port keeps GPU caches where SPARTAN_GPU_USER_DIR points.
     const char* port_dir = std::getenv("SPARTAN_GPU_USER_DIR");
     auto user_dir = port_dir ? std::filesystem::path(port_dir) : std::filesystem::current_path() / PORTABLE_DIR;
-    if (!std::filesystem::exists(user_dir)) {
-        // If it doesn't exist, use the standard path for the platform instead.
+    if (!port_dir && !std::filesystem::exists(user_dir)) {
+        // No port dir given: use the standard path for the platform instead.
         // NOTE: On Windows we currently just create the portable directory instead.
 #ifdef __APPLE__
         user_dir =
@@ -111,7 +111,8 @@ static auto UserPaths = [] {
     std::unordered_map<PathType, fs::path> paths;
 
     const auto create_path = [&](PathType shad_path, const fs::path& new_path) {
-        std::filesystem::create_directory(new_path);
+        // create_directories: the parent may not exist (a fresh HOME has no ~/.local/share).
+        std::filesystem::create_directories(new_path);
         paths.insert_or_assign(shad_path, new_path);
     };
 
