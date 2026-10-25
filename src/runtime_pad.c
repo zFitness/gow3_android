@@ -196,7 +196,11 @@ static bool SDLCALL mouse_watch(void *userdata, SDL_Event *event) {
         return true;
     }
     if (event->type!=SDL_EVENT_MOUSE_WHEEL) return true;
-    int steps=event->wheel.integer_y;
+    /* gport: SDL 3.2 before 3.2.12 has no integer_y, so the float scroll is accumulated here. */
+    static float wheel_accum=0.0f;
+    wheel_accum+=event->wheel.y;
+    int steps=(int)wheel_accum;
+    wheel_accum-=steps;
     if (event->wheel.direction==SDL_MOUSEWHEEL_FLIPPED) steps=-steps;
     SDL_AtomicInt *ticks=&wheel_ticks[steps<0];
     for (int n=steps<0 ? -steps : steps; n>0 && SDL_GetAtomicInt(ticks)<WHEEL_MAX_PENDING; --n) SDL_AddAtomicInt(ticks,1);
