@@ -28,33 +28,19 @@ echo ">> run-as 拷入：$DEST"
     mkdir -p '$DEST/gdata' '$DEST/home' &&
     cp -r '$STAGING'/. '$DEST/gport/' &&
     rm -rf '$STAGING'"
+# 阶段一树里还没有 entry.sh（pack.py 阶段才有）——直接从 runtime/ 源码侧补上
+if [ -f runtime/entry.sh ]; then
+  "${ADB[@]}" shell run-as "$PKG" sh -c "cat > '$DEST/gport/entry.sh' && chmod 755 '$DEST/gport/entry.sh'" < runtime/entry.sh
+fi
 
 echo ">> 生成阶段一手工入口：$DEST/launch.sh"
 "${ADB[@]}" shell run-as "$PKG" sh -c "cat > '$DEST/launch.sh' && chmod 755 '$DEST/launch.sh'" <<'WRAPPER'
 #!/system/bin/sh
-# 阶段一手工入口：PC 原链（run.py → spartanport-probe）。
-# fexdroid Runner 自定义程序：程序 = <rootfs>/bin/sh，参数 = imports/<name>/launch.sh game
-HOST=/data/user/0/ro.cobrabm.fexdroid/files/rootfs
+# 阶段一手工入口：转调 entry.sh（verb 协议；fexdroid Runner 自定义程序：
+# 程序 = <rootfs>/bin/sh，参数 = imports/<name>/launch.sh game）
 BASE=/data/user/0/ro.cobrabm.fexdroid/files/imports/spartanport
-export SPARTAN_PORT_DIR="$BASE/gport"
-export SPARTAN_DATA_DIR="$BASE/gdata"
-export SPARTAN_HOME="$BASE/home/gport"
 export SPARTAN_GAME_DIR="${SPARTAN_GAME_DIR:-/storage/emulated/0/Download/games/ps4/GOW3 ROM/CUSA01740}"
-mkdir -p "$SPARTAN_DATA_DIR/user" "$SPARTAN_DATA_DIR/logs" "$SPARTAN_HOME"
-# guest glibc：桌面同款 hwcaps 关闭（FEXCore 下不受支持指令）
-export GLIBC_TUNABLES='glibc.cpu.hwcaps=-AVX2,-AVX,-AVX_Fast_Unaligned_Load,-AVX2_Usable,-AVX_Usable'
-export SDL_VIDEODRIVER=x11 DISPLAY=:0
-export MESA_VK_WSI_DEBUG=sw MESA_VK_WSI_PRESENT_MODE=relaxed
-export FEXDROID_PRESENT="${FXD_ROOT:-$HOST}/tmp/fxpresent.sock"
-export SDL_JOYSTICK_HIDAPI=0
-[ -f "$SPARTAN_PORT_DIR/config/gport-gamecontrollerdb.txt" ] &&
-    export SDL_GAMECONTROLLERCONFIG_FILE="$SPARTAN_PORT_DIR/config/gport-gamecontrollerdb.txt"
-export PULSE_SERVER="unix:${FXD_ROOT:-$HOST}/tmp/pulse/native" PULSE_LATENCY_MSEC=60
-# 手柄文件桥（fexdroid 无条件注入；兜底显式路径）
-export SPARTAN_PAD_FILE="${SPARTAN_PAD_FILE:-/data/user/0/ro.cobrabm.fexdroid/files/android-pad.state}"
-export LD_LIBRARY_PATH="$SPARTAN_PORT_DIR/arm64/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-cd "$SPARTAN_PORT_DIR"
-exec "$HOST/usr/bin/python3.13" run.py game "$@"
+exec "$BASE/gport/entry.sh" "$@"
 WRAPPER
 
 echo ">> 完成。fexdroid Runner 里建自定义程序："
