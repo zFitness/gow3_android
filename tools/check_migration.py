@@ -62,7 +62,6 @@ REPLAY = {
     'gpu/shim/spartanport_settings.h',
     'gpu/spartanportgpu.h',
     'scripts/game_update.py',
-    'build.sh',
     'tests/test_patches.py',
     'tests/test_pad.c',
     'tests/test_graphics_settings.cpp',
@@ -71,6 +70,9 @@ REPLAY = {
 # 排除清单：不迁入（驱动归 fexdroid、APK/deploy/CI 血统、音频、LSFG、run-gport 链）
 SKIP = {
     'src/runtime_audio.c',  # 音频：走系统 PulseAudio，保持上游（永久 UPSTREAM）
+    'build.sh',             # 保持上游（PC 路径原样）；ARM64 交叉构建由 tools/android/build_arm64.sh
+                            # 承载——参考仓 build.sh 的增量是旧安卓流程残留（GOW3_PGO/gow3gpu 旧
+                            # 命名与已对齐的 gpu/CMakeLists.txt 不匹配，且删除 x86 宿主 ISA 编译）
     'packaging/windows/README.md',
     'packaging/gow3-entry.c',
     'packaging/linux.sh',
