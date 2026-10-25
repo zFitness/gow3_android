@@ -1,0 +1,4 @@
+# AYN Thor, Xbox firmware mode (2020:0112), Nintendo labels on physical buttons.
+# Printed B=South/Cross, A=East/Circle, Y=West/Square, X=North/Triangle.
+# Actual D-pad events are HAT0, not the advertised BTN_DPAD_* keys.
+030018dc202000001201000000000000,AYN Thor,a:b0,b:b1,x:b3,y:b4,back:b10,guide:b12,start:b11,leftstick:b13,rightstick:b14,leftshoulder:b6,rightshoulder:b7,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,rightx:a2,righty:a3,lefttrigger:a5,righttrigger:a4,platform:Linux,
