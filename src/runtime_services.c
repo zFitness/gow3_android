@@ -265,9 +265,28 @@ static struct {
     int dir_count, has_new, choosing, selected;
     unsigned char *new_icon;
     uint64_t new_icon_size;
+    int64_t shown_at;  /* gport: SPARTAN_SAVE_LIST_TIMEOUT seconds without input counts as cancel */
 } save_dialog;
 static char save_labels[33][2700], save_icons[33][720], save_question[2800];
 static const char *save_preview_path;
+/* gport: the save list has no timeout on the PC: without one the list waits forever. On Android
+ * the game thread samples the pad file (scePadReadState), so a list that waits for an input
+ * source that cannot arrive blocks every input on screen. Default 300 s, slow enough not to
+ * interrupt a normal hesitation. */
+static int64_t save_list_timeout(void) {
+    const char *env = getenv("SPARTAN_SAVE_LIST_TIMEOUT");
+    int64_t seconds = env && *env ? atoll(env) : 300;
+    return seconds > 0 ? seconds : 300;
+}
+static int64_t now_seconds(void) {
+    struct timespec ts;
+#ifdef _WIN32
+    return (int64_t)time(NULL);
+#else
+    clock_gettime(CLOCK_MONOTONIC,&ts);
+    return (int64_t)ts.tv_sec;
+#endif
+}
 void runtime_savedata_preview_path(const char *path) { save_preview_path=path; }
 static const char *save_text(const char *english, const char *portuguese) {
     const char *ui=getenv("SPARTAN_UI_LANGUAGE");
@@ -336,6 +355,7 @@ static void save_show_list(int focus) {
     const char *title=save_dialog.type==1 ? save_text("Save game","Salvar jogo")
                       : save_dialog.type==2 ? save_text("Load game","Carregar jogo") : save_text("Delete save","Excluir save");
     save_dialog.choosing=n && spartanportgpu_choice_begin(title,labels,icons,n,focus) ? 1 : 0;
+    save_dialog.shown_at=now_seconds();
     if (!save_dialog.choosing) {
         save_dialog.result=SAVE_RESULT_CANCELED;
         dialogs[2].status=DIALOG_FINISHED; dialogs[2].button=0;
@@ -394,6 +414,13 @@ static ABI int32_t save_open(const unsigned char *p) {
 static ABI int32_t save_status(void) {
     if (save_dialog.choosing) {
         int choice=spartanportgpu_choice_poll();
+        if (choice==-1 && now_seconds()-save_dialog.shown_at>=save_list_timeout()) {
+            /* No input source can reach the list (see save_list_timeout). Close it and hand the
+             * control back as cancelled, otherwise it keeps drawing and keeps the game's input. */
+            printf("Runtime: SaveDataDialog list: timed out after %lld s with no input, cancelling\n",
+                   (long long)save_list_timeout());
+            choice=-2;
+        }
         if (choice!=-1) {
             if (save_dialog.choosing==2) {
                 if (choice!=0) { save_show_list(save_dialog.selected); return dialog_status(2); }

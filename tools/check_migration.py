@@ -109,6 +109,15 @@ SKIP_GLOBS = [
 ]
 
 
+# 部分重放（有意只重放部分增量，与参考仓永久不同）：
+#   runtime_services.c   只重放存档列表超时（IME 文件桥不迁，fexdroid 走 X11 键盘）
+#   spartanportgpu.cpp   只重放 pad_publish（text_input_begin/poll 不迁，D9）
+PARTIAL = {
+    'src/runtime_services.c',
+    'gpu/shim/spartanportgpu.cpp',
+}
+
+
 def norm(t):
     """对比清单 2026-10-22 的归一化规则。"""
     t = re.sub(r'\bspartanport_(?!gpu\b)', 'gow3_', t)
@@ -165,6 +174,8 @@ def main():
             status = 'ALIGNED'
         elif rel == 'src/runtime_audio.c':
             status = 'UPSTREAM'
+        elif rel in PARTIAL:
+            status = 'PARTIAL'
         elif rel in REPLAY:
             status = 'REPLAY'
         else:
