@@ -161,7 +161,7 @@ def main():
             status = 'SKIP'
         elif not os.path.exists(own_path):
             status = 'ADD'
-        elif norm(ref) == open(own_path, errors='replace').read():
+        elif norm(ref) == norm(open(own_path, errors='replace').read()):
             status = 'ALIGNED'
         elif rel == 'src/runtime_audio.c':
             status = 'UPSTREAM'
