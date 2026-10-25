@@ -16,6 +16,7 @@
 #include "spartanport_toggles.h"
 #include "video_core/renderer_vulkan/vk_wait_diagnostics.h"
 #include "common/assert.h"
+#include "common/arch.h"
 #include "common/debug.h"
 #include "common/thread.h"
 #include "imgui/renderer/texture_manager.h"
@@ -89,6 +90,9 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
     EndRendering();
     is_rendering = true;
     render_state = new_state;
+    // 配对护栏：只有确实要录制开始命令才递增；同 state 续接在上面的提前返回里已排除。
+    render_pass_pairing.OnBegin();
+    const auto producer = ObserveProducer("BeginRendering");
 
     std::array<vk::RenderingAttachmentInfo, 8> color_attachments;
     for (u32 i = 0; i < render_state.num_color_attachments; ++i) {
@@ -138,6 +142,7 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
         if (FullBarriers()) {
             RecordFullBarrier(current_cmdbuf);
         }
+        ObserveRenderBegin(current_cmdbuf, "Scheduler::BeginRendering(immediate)");
         current_cmdbuf.beginRendering(rendering_info);
         return;
     }
@@ -154,6 +159,7 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
         if (FullBarriers()) {
             RecordFullBarrier(cmdbuf);
         }
+        ObserveRenderBegin(cmdbuf, "Scheduler::BeginRendering");
         cmdbuf.beginRendering(info);
     });
 }
@@ -162,8 +168,19 @@ void Scheduler::EndRendering() {
     if (!is_rendering) {
         return;
     }
+    // 配对护栏：深度为 0 却要结束，说明记录侧没有对应的开始命令（跨代错位：开始入队后、结束
+    // 入队前并发提交换代，结束落进下一代）。此时告警并放弃该命令，不让驱动解引用空 subpass；
+    // 告警代表仍有状态错配，不是已修复。
+    if (!render_pass_pairing.OnEnd()) {
+        std::printf("GPU pairing guard: EndRendering without Begin discarded (depth=0, caller=%p); "
+                    "render pass state mismatch remains\n",
+                    __builtin_return_address(0));
+        is_rendering = false;
+        return;
+    }
     is_rendering = false;
     Record([](vk::CommandBuffer cmdbuf) {
+        ObserveRenderEnd(cmdbuf, "Scheduler::EndRendering");
         cmdbuf.endRendering();
         if (FullBarriers()) {
             RecordFullBarrier(cmdbuf);
@@ -267,6 +284,10 @@ void Scheduler::KickRecording(bool force) {
     if (!recording_threaded) {
         return;
     }
+    const auto producer = ObserveProducer("KickRecording");
+    // KickRecording 不更换 command buffer 代：这里收口只会让驱动反复结束/重开渲染范围
+    // （Adreno 上等于 GMEM resolve + reload），实测会把 60 FPS 压到 30 FPS。跨代错位由
+    // 配对护栏拦截，实际换代只发生在 SubmitExecution（提交前已收口）。
     // Callers kick where nobody holds the raw command buffer: deferral resumes.
     direct_mode = false;
     // Batches of tens of KiB keep the queue handoff cheap relative to the work it carries.
@@ -318,7 +339,7 @@ void Scheduler::RecorderThread(std::stop_token stoken) {
             SpartanThreads::Available() >= 12 ? 200 : 20);
         const auto spin_until = std::chrono::steady_clock::now() + spin_time;
         for (u32 spins = 1; queued_chunks.load(std::memory_order_acquire) == 0; ++spins) {
-            __builtin_ia32_pause();
+            COMMON_CPU_RELAX();
             // The clock is read every 256 pauses, not per iteration.
             if (!(spins & 255) &&
                 (stoken.stop_requested() || std::chrono::steady_clock::now() >= spin_until)) {
@@ -429,7 +450,12 @@ void Scheduler::AllocateWorkerCommandBuffers() {
         .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
     };
 
+    // 换代：新 command buffer 代的渲染深度从 0 开始。上一代若有未闭合范围，SubmitExecution
+    // 已先收口；换代重置使"开始落在旧代、孤立结束在新代"的错位被 EndRendering 护栏拦截。
+    render_pass_pairing.Swap();
+
     current_cmdbuf = command_pool.Commit();
+    ObserveNewSequence(current_cmdbuf);
     Check(current_cmdbuf.begin(begin_info));
 
     // Invalidate dynamic state so it gets applied to the new command buffer.
@@ -447,6 +473,7 @@ void Scheduler::AllocateWorkerCommandBuffers() {
 
 void Scheduler::SubmitExecution(SubmitInfo& info) {
     std::scoped_lock lk{submit_mutex};
+    const auto producer = ObserveProducer("SubmitExecution");
     const u64 signal_value = work_semaphore.NextTick();
 
 #if TRACY_GPU_ENABLED
@@ -467,8 +494,23 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
         profiler->Mark(0x5B317ull, [] { return std::string{"(between submissions: GPU idle)"}; });
     }
     SyncRecording();
+    // 提交前收口保证：SyncRecording 之后若仍有未配对的开始命令（并发下开始闭包已入队而结束未
+    // 记录，或被护栏跳过），先强制补一个结束再收口，避免带着未闭合的渲染范围提交；换代时深度
+    // 归 0 使下一次开始重新计数。
+    if (render_pass_pairing.Depth() != 0) {
+        std::printf("GPU pairing guard: submit with open render pass closed (depth=%u, caller=%p); "
+                    "render pass state mismatch remains\n",
+                    render_pass_pairing.Depth(), __builtin_return_address(0));
+        Record([](vk::CommandBuffer cmdbuf) {
+            ObserveRenderEnd(cmdbuf, "Scheduler::SubmitExecution(force close)");
+            cmdbuf.endRendering();
+        });
+        SyncRecording();
+        render_pass_pairing.Swap();
+    }
     // Guest memory copies into staging read by this submission (copy threads).
     WaitHostCopies();
+    ObserveSubmit(current_cmdbuf);
     Check(current_cmdbuf.end());
 
     const vk::Semaphore timeline = work_semaphore.Handle();

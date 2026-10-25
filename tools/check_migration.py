@@ -105,7 +105,6 @@ SKIP = {
 }
 SKIP_GLOBS = [
     'tools/android/mesa-patches/*',      # 驱动补丁 → fexdroid patches/mesa
-    'tests/test_render_pass_pairing.*',  # 由对应任务显式迁移（避免重复计数）
 ]
 
 

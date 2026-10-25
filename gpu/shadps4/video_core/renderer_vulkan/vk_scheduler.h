@@ -24,6 +24,8 @@
 #include "common/unique_function.h"
 #include "video_core/amdgpu/regs_color.h"
 #include "video_core/amdgpu/regs_primitive.h"
+#include "video_core/renderer_vulkan/vk_recording_observer.h"
+#include "video_core/renderer_vulkan/vk_render_pass_pairing.h"
 #include "video_core/renderer_vulkan/vk_resource_pool.h"
 #include "video_core/renderer_vulkan/vk_semaphore.h"
 
@@ -914,6 +916,11 @@ private:
     std::jthread priority_pending_ops_thread;
     RenderState render_state;
     bool is_rendering = false;
+    // 配对护栏：按 command buffer 代计数的渲染深度（生产路径复用 vk_render_pass_pairing.h，
+    // 宿主行为测试用同一实现）。BeginRendering 递增、EndRendering 递减，换代时归零。EndRendering
+    // 在深度为 0 时说明记录侧没有对应开始命令（跨代错位），此时告警并跳过该命令，不让驱动解引用
+    // 空 subpass。深度只统计"确实会录制的开始命令"，同 state 续接不重复递增；并发下是保守下界。
+    RenderPassPairing render_pass_pairing;
     // spartanport: threaded recording
     std::unique_ptr<RecordChunk> record_chunk;
     std::vector<std::unique_ptr<RecordChunk>> full_chunks;
