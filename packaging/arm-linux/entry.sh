@@ -14,7 +14,8 @@ DATA="${SPARTAN_DATA_DIR:-$PKG/gdata}"
 GHOME="${SPARTAN_HOME:-$PKG/home/gport}"
 CONFIG="${SPARTAN_CONFIG:-$DATA/spartanport.ini}"
 OUT="$DATA/out"
-GAME_DIR="${SPARTAN_GAME_DIR:-}"
+# 调试期缺省：共享存储的游戏 dump（fexdroid 注入 manifest env 后此处仅为兜底）
+GAME_DIR="${SPARTAN_GAME_DIR:-/storage/emulated/0/Download/games/ps4/GOW3 ROM/CUSA01740}"
 HOST="${FXD_ROOT:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}"
 PAD="${SPARTAN_PAD_FILE:-${FXD_FILES:+$FXD_FILES/android-pad.state}}"
 PY=python3.13; command -v "$PY" >/dev/null 2>&1 || PY=python3
