@@ -50,14 +50,40 @@ static SDL_DisplayID MonitorDisplay() {
     return chosen;
 }
 
-// spartanport: a window opens at the render resolution chosen in the launcher (or the in-game menu), fitted
-// to the chosen display's usable area (with room for the title bar); one too large opens maximized,
-// restoring to that size shrunk to fit. The picture is scaled to the window either way. True when shrunk.
+// Android 的显示桥：帧经 FEXDROID_PRESENT 套接字直送应用，此时窗口必须完整覆盖屏幕——
+// fexdroid 的 covers_screen（Mesa wsi_common_x11.c 的 fxpresent_window）据此决定走直接路径，
+// 否则每帧退回 X server 的慢速拷贝，应用侧 DisplayBridge.directFrames() 也恒为 0。
+static bool PresentBridgeActive() { return std::getenv("FEXDROID_PRESENT") != nullptr; }
+
+// spartanport: a window opens at the render resolution chosen in the launcher (or the in-game menu),
+// fitted to the chosen display's usable area (with room for the title bar); one too large opens
+// maximized, restoring to that size shrunk to fit. The picture is scaled to the window either way.
+// True when shrunk.
+//
+// 直送桥（PresentBridgeActive）要求的是反面：窗口就是屏幕。留标题栏空间会让窗口比屏幕小，
+// 直接路径随之失效，所以此时按显示区域的完整尺寸开窗，画面由桥按 1:1 拷贝（溢出裁切）。
 static bool StartSize(s32& width, s32& height, SDL_DisplayID display) {
-    constexpr int title_room = 48;
     const std::vector<std::string> names = SpartanGraphics::ResolutionNames();
     const int index = std::clamp(SpartanSettings::Get().render_resolution.load(), 0, int(names.size()) - 1);
     const auto [w, h] = SpartanGraphics::ResolutionSize(names[index]);
+    if (PresentBridgeActive()) {
+        SDL_Rect bounds{};
+        if (SDL_GetDisplayBounds(display, &bounds) && bounds.w > 0 && bounds.h > 0) {
+            width = bounds.w;
+            height = bounds.h;
+        } else {
+            width = w;
+            height = h;
+        }
+        // 渲染分辨率不得被静默改写：直送桥下窗口 = X 屏幕 = app 按 render_resolution 定的尺寸
+        // （app 侧的拷贝是 1:1 的，X 屏幕与窗口必须同尺寸，否则画面被裁），这里只记录并上报。
+        if (width < w || height < h)
+            std::printf("VideoOut: present bridge: render resolution %dx%d does not fit the display area "
+                        "%dx%d, output capped to the display area (the setting is unchanged)\n",
+                        w, h, width, height);
+        return width < w || height < h;
+    }
+    constexpr int title_room = 48;
     double scale = 1.0;
     SDL_Rect usable{};
     if (SDL_GetDisplayUsableBounds(display, &usable) && usable.w > 0 && usable.h > title_room) {
@@ -70,7 +96,14 @@ static bool StartSize(s32& width, s32& height, SDL_DisplayID display) {
 
 WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}, height{height_} {
     // Gamepads are sampled by runtime_pad.c; their events are pumped here with the window's.
-    if (!SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+    // 在 Android app 里(SPARTAN_ANDROID_INPUT=1)所有手柄都由 PadBridge 交给 runtime_pad.c
+    // (SPARTAN_PAD_FILE),SDL 找不到任何手柄:它每秒的热插拔扫描会加载 libudev,而 app 沙箱拒绝
+    // 该操作,于是每秒刷出一串 SELinux denial,ColorOS 上会被当成攻击行为上报。
+    // The Android app (a separate project) still sets the old name; the port's own name wins.
+    const char* android_input = std::getenv("SPARTAN_ANDROID_INPUT");
+    if (!android_input) android_input = std::getenv("GOW3_ANDROID_INPUT");
+    const bool sdl_pads = !(android_input && android_input[0] == '1');
+    if (!SDL_InitSubSystem(SDL_INIT_VIDEO | (sdl_pads ? SDL_INIT_GAMEPAD : 0))) {
         UNREACHABLE_MSG("Failed to initialize SDL video: {}", SDL_GetError());
     }
     const SDL_DisplayID display = MonitorDisplay();
@@ -82,7 +115,9 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width_);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
-    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, too_large);
+    // 直送桥要求窗口精确等于屏幕，最大化交给无窗口管理器的 X server 反而可能改掉尺寸。
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN,
+                           too_large && !PresentBridgeActive());
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
     base_title = title;
     window = SDL_CreateWindowWithProperties(props);
@@ -275,16 +310,14 @@ bool WindowSDL::PollEvents() {
     // so a click cannot land on another monitor); the menu, the save list, a text dialog,
     // another window or the game's pause menu (the pause key) get it back. Taken back, it starts
     // at the window's centre; let go by the pause key, the system cursor shows.
+    // gow3_android_glibc: the Android touch overlay no longer maps touches to the mouse, so the
+    // `overlay_mouse` switch and its SDL_ShowCursor branch are gone (the cursor stays hidden).
     const bool paused = mouse_paused.load(std::memory_order_relaxed);
     const bool lock = SpartanSettings::Get().mouse_lock.load(std::memory_order_relaxed) && !text_active && !paused &&
                       !SpartanOverlay::CapturesInput() && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS);
     if (lock != mouse_locked) {
         if (lock) SDL_WarpMouseInWindow(window, width / 2.0f, height / 2.0f);
         if (SDL_SetWindowRelativeMouseMode(window, lock)) mouse_locked = lock;
-    }
-    if (const bool show = paused && !mouse_locked; show != cursor_shown) {
-        show ? SDL_ShowCursor() : SDL_HideCursor();
-        cursor_shown = show;
     }
     return is_open;
 }
