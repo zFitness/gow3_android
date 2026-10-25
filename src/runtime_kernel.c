@@ -3,6 +3,7 @@
  * use FreeBSD numbering; host errno values never reach the guest directly. */
 #define _GNU_SOURCE
 #include "runtime.h"
+#include "gport_guest_cpu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -84,10 +85,10 @@ static ABI uint64_t process_time_counter(void) {
     return (uint64_t)(t.tv_sec-process_start.tv_sec)*1000000000+(uint64_t)(t.tv_nsec-process_start.tv_nsec);
 }
 static ABI uint64_t process_time_frequency(void) { return 1000000000; }
-/* The guest's TSC is the process clock in nanoseconds. The raw rdtsc differs per core on some
- * hosts (3.9 s apart on a Xeon E5-2680 v4, #42), so a thread moving cores made the game jump. */
-static ABI uint64_t read_tsc(void) { return process_time_counter(); }
-static ABI uint64_t tsc_frequency(void) { return 1000000000; }
+/* gport: RDTSC goes through the boundary: the host's counter on x86-64 hosts, the guest CPU's own
+ * on the JIT (the game reads it for timing, so it must be the guest's view). */
+static ABI uint64_t read_tsc(void) { return gport_guest_cpu_tsc(); }
+static ABI uint64_t tsc_frequency(void) { return gport_guest_cpu_tsc_frequency(); }
 /* Shared with the GPU library so flip/label timestamps use the guest's clock. */
 uint64_t runtime_process_time_us(void) { return process_time(); }
 uint64_t runtime_process_time_counter(void) { return process_time_counter(); }
@@ -256,7 +257,7 @@ static ABI int32_t thread_once(int32_t *once,void (ABI *routine)(void)) {
         int32_t state=__atomic_load_n(once,__ATOMIC_ACQUIRE);
         if (state==1) return 0;
         if (state==0 && __atomic_compare_exchange_n(once,&state,2,0,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE)) {
-            routine();
+            gport_guest_cpu_call((uintptr_t)routine,0,NULL);
             __atomic_store_n(once,1,__ATOMIC_RELEASE);
             return 0;
         }
@@ -300,7 +301,8 @@ void runtime_thread_keys_cleanup(void) {
             void *value=key_values[i];
             if (!value || !keys[i].used || !keys[i].destructor) continue;
             key_values[i]=NULL; any=1;
-            keys[i].destructor(value);
+            gport_guest_cpu_call((uintptr_t)keys[i].destructor,1,
+                                 (const uint64_t[]){ (uint64_t)(uintptr_t)value });
         }
         if (!any) break;
     }
