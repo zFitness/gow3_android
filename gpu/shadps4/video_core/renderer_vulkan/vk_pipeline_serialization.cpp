@@ -1848,7 +1848,12 @@ void PersistentSrtInfo::Serialize(Serialization::Archive& ar) const {
 
     srt.Write(this, sizeof(*this));
     if (walker_func_size) {
-        srt.Write(reinterpret_cast<void*>(walker_func), walker_func_size);
+        // gport: on x86 the walker is machine code, on ARM64 it is the portable SRT bytecode.
+        // SrtWalkerCode() hides that difference.
+        const auto* code = static_cast<const u8*>(SrtWalkerCode(walker_func));
+        if (code) {
+            srt.Write(code, walker_func_size);
+        }
     }
 }
 
@@ -1856,10 +1861,17 @@ bool PersistentSrtInfo::Deserialize(Serialization::Archive& ar) {
     Serialization::Reader srt{ar};
 
     srt.Read(this, sizeof(*this));
+    // gport: the stored walker belonged to the process that wrote the cache.
+    walker_func = {};
 
     if (walker_func_size) {
-        walker_func = RegisterWalkerCode(ar.CurrPtr(), walker_func_size);
+        const auto* code = ar.CurrPtr();
         ar.Advance(walker_func_size);
+        walker_func = RegisterWalkerCode(code, walker_func_size);
+        if (!walker_func) {
+            walker_func_size = 0;
+            return false;
+        }
     }
 
     return true;
