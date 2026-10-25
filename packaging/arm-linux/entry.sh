@@ -19,6 +19,11 @@ HOST="${FXD_ROOT:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}"
 PAD="${SPARTAN_PAD_FILE:-${FXD_FILES:+$FXD_FILES/android-pad.state}}"
 PY=python3.13; command -v "$PY" >/dev/null 2>&1 || PY=python3
 PROBE="$TREE/bin/spartanport-probe"
+# python 统一走显式 loader（烤入的解释器路径在跨 app/无会话场景不可靠；旧链同款模式）
+LOADER="$HOST/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
+py_exec() {
+    if [ -x "$LOADER" ]; then exec "$LOADER" "$PY" "$@"; else exec "$PY" "$@"; fi
+}
 
 launch_env() {
     mkdir -p "$DATA/user" "$DATA/logs" "$OUT" "$GHOME"
@@ -48,7 +53,7 @@ game|run)
     [ -n "$GAME_DIR" ] || { echo "Runtime: SPARTAN_GAME_DIR is not set" >&2; exit 2; }
     export SPARTAN_PROBE="$PROBE"
     cd "$TREE"
-    exec "$PY" run.py "$@"
+    py_exec run.py "$@"
     ;;
 launcher)
     launch_env
@@ -56,7 +61,7 @@ launcher)
         printf '{"error":"tkinter missing: install python3-tk into the rootfs (fexdroid scripts/add-python313-tk.sh)"}\n'
         exit 3
     fi
-    exec "$PY" "$TREE/launcher/spartanport_launcher_win.py"
+    py_exec "$TREE/launcher/spartanport_launcher_win.py"
     ;;
 check|vulkan)
     launch_env
@@ -70,7 +75,7 @@ config)
     sub="${1:-}"; [ $# -gt 0 ] && shift || true
     [ -d "$DATA" ] || mkdir -p "$DATA"
     [ -f "$CONFIG" ] || : > "$CONFIG"
-    exec "$PY" - "$sub" "$CONFIG" "$@" <<'PYEOF'
+    py_exec - "$sub" "$CONFIG" "$@" <<'PYEOF'
 import json, sys, shutil
 
 SCHEMA = {
@@ -216,7 +221,7 @@ PYEOF
 info)
     sub="${1:-}"
     [ "$sub" = "patches" ] || { printf '{"error":"usage: info patches"}\n'; exit 2; }
-    exec "$PY" - "$OUT/patch_status.json" <<'PYEOF'
+    py_exec - "$OUT/patch_status.json" <<'PYEOF'
 import json, sys, os
 path = sys.argv[1]
 if not os.path.isfile(path):
