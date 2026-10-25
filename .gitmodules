@@ -16,3 +16,6 @@
 [submodule "gpu/third_party/xbyak"]
 	path = gpu/third_party/xbyak
 	url = https://github.com/herumi/xbyak.git
+[submodule "third_party/FEX"]
+	url = https://github.com/FEX-Emu/FEX.git
+	path = third_party/FEX
