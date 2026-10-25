@@ -1007,6 +1007,24 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     info.AddSignal(swapchain.GetPresentReadySemaphore());
     info.AddSignal(frame->present_done);
     scheduler.Flush(info);
+    // gport: the Vulkan layer at vkQueuePresentKHR (Lossless Scaling frame generation,
+    // SPARTAN_LSFG, loaded by run-gport.sh with the player's own Lossless.dll) waits for the
+    // present-ready semaphore that the submission above signals. The port deliberately does not
+    // add a wait on the app side: Flush(info) submits in this very thread (it holds
+    // submit_mutex until the submit returned), so the submission and its present-ready signal are
+    // already in the queue and vkQueuePresentKHR is ordered behind it on the same queue. Waiting
+    // for the GPU to finish would idle the pipeline every frame.
+    static const bool present_layer = std::getenv("SPARTAN_LSFG") != nullptr;
+    // Logged once and thread safe: a function-local static initializer is atomic since C++11, and
+    // the presenter can run on the worker thread (SPARTAN_PRESENT_THREAD=0).
+    static const bool present_layer_logged_once = [] {
+        LOG_INFO(Render_Vulkan,
+                 "gport: LSFG present path: {} (SPARTAN_LSFG={}); no app-side wait for the GPU "
+                 "(the submission is already queued by Flush)",
+                 present_layer ? "ENABLED" : "off", present_layer ? "1" : "(unset)");
+        return true;
+    }();
+    (void)present_layer_logged_once;
 
     // Present to swapchain.
     {

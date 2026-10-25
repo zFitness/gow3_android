@@ -15,6 +15,13 @@
 
 namespace Vulkan {
 
+namespace {
+// gport: the exit code for the LSFG failure path. run-gport.sh uses it to tell "the lsfg-vk layer
+// died" from an ordinary crash, so only that case clears the LSFG state and retries once without
+// it. Must stay in sync with the number in tools/android/device/run-gport.sh.
+constexpr int kLsfgFailureExitCode = 46;
+} // namespace
+
 static constexpr vk::SurfaceFormatKHR SURFACE_FORMAT_HDR = {
     .format = vk::Format::eA2B10G10R10UnormPack32,
     .colorSpace = vk::ColorSpaceKHR::eHdr10St2084EXT,
@@ -92,6 +99,14 @@ void Swapchain::Create(u32 width_, u32 height_) {
         return;
     }
 
+    if (swapchain_result != vk::Result::eSuccess && std::getenv("SPARTAN_LSFG") &&
+        !std::getenv("DISABLE_LSFG")) {
+        std::printf("Swapchain: Lossless Scaling frame generation failed to create (%s); exiting "
+                    "%d so run-gport.sh retries once without it\n",
+                    vk::to_string(swapchain_result).c_str(), kLsfgFailureExitCode);
+        std::fflush(nullptr);
+        std::_Exit(kLsfgFailureExitCode);
+    }
     ASSERT_MSG(swapchain_result == vk::Result::eSuccess, "Failed to create swapchain: {}",
                vk::to_string(swapchain_result));
     swapchain = chain;
@@ -176,6 +191,14 @@ bool Swapchain::Present() {
         result == vk::Result::eErrorSurfaceLostKHR) {
         needs_recreation = true;
     } else {
+        if (result != vk::Result::eSuccess && std::getenv("SPARTAN_LSFG") &&
+            !std::getenv("DISABLE_LSFG")) {
+            std::printf("Swapchain: Lossless Scaling frame generation failed to present (%s); "
+                        "exiting %d so run-gport.sh retries once without it\n",
+                        vk::to_string(result).c_str(), kLsfgFailureExitCode);
+            std::fflush(nullptr);
+            std::_Exit(kLsfgFailureExitCode);
+        }
         ASSERT_MSG(result == vk::Result::eSuccess, "Swapchain presentation failed: {}",
                    vk::to_string(result));
     }
