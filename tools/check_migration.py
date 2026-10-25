@@ -109,11 +109,13 @@ SKIP_GLOBS = [
 
 
 # 部分重放（有意只重放部分增量，与参考仓永久不同）：
-#   runtime_services.c   只重放存档列表超时（IME 文件桥不迁，fexdroid 走 X11 键盘）
-#   spartanportgpu.cpp   只重放 pad_publish（text_input_begin/poll 不迁，D9）
+#   runtime_services.c        只重放存档列表超时（IME 文件桥不迁，fexdroid 走 X11 键盘）
+#   spartanportgpu.cpp        只重放 pad_publish + 修复标记（text_input 两侧本就一致）
+#   spartanport_overlay.cpp   只重放 pad 快照管道 + CancelChoice（PollMenuShortcut 安卓门控不迁，D9）
 PARTIAL = {
     'src/runtime_services.c',
     'gpu/shim/spartanportgpu.cpp',
+    'gpu/shim/spartanport_overlay.cpp',
 }
 
 

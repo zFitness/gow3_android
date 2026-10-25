@@ -219,6 +219,14 @@ static void StartProfileWriter() {
 #endif
 
 extern "C" int spartanportgpu_init(const SpartanGpuConfig* config) {
+    // gport: the native port markers: they tell which port-side fixes the GPU library on the
+    // device carries, so a log can be matched against the build in one glance.
+    std::printf("GPORT_NATIVE_FIX_081DF6F=active\n");
+    std::printf("GPORT_NATIVE_FIX_195C7AB=active\n");
+    std::printf("GPORT_NATIVE_FIX_A101EDB=active\n");
+    std::printf("GPORT_NATIVE_FIX_SCHEDULER_CHUNK=active\n");
+    std::printf("GPORT_NATIVE_FIX_9D0F51C_ANISOTROPY=active\n");
+    std::printf("GPORT_NATIVE_FIX_9D0F51C_VIBRATION=active\n");
     SpartanSettings::Load();
 #ifdef SPARTAN_PGO_GENERATE
     StartProfileWriter();
@@ -428,6 +436,12 @@ extern "C" int spartanportgpu_choice_begin(const char* title, const char* const*
 
 extern "C" int spartanportgpu_choice_poll(void) {
     return SpartanOverlay::PollChoice();
+}
+
+/* runtime_pad.c 发布的 pad 快照: overlay 的对话框(存档列表、文字输入)在各自的线程上读它。
+ * Android 的屏幕手柄只写 pad 状态文件,不产生 SDL 事件,对话框只能靠这份快照听到按键。 */
+extern "C" void spartanportgpu_pad_publish(uint32_t buttons) {
+    SpartanOverlay::PublishPad(buttons);
 }
 
 extern "C" int spartanportgpu_choice_confirm(const char* title, const char* const* items, int count, int focus,

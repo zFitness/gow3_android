@@ -53,6 +53,11 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent);
 /// The menu is open or a text entry is shown: the game's input is held neutral.
 bool CapturesInput();
 
+/// 游戏线程(scePadReadState):注入的 pad 文件按键,供下面的对话框使用。
+void PublishPad(u32 buttons);
+/// 对话框线程:自上次读取以来的新按键边沿(只读一次,按住不重复)。
+u32 PadEdges();
+
 /// Window thread: the game's text dialog (sceImeDialog). Shown as a box on screen until
 /// `active` is false; typing goes to the window (sdl_window), the box only displays it.
 void SetTextEntry(bool active, const std::string& prompt, const std::string& text);

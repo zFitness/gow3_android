@@ -33,6 +33,11 @@ int spartanportgpu_text_input_poll(char *out_utf8, uint64_t size);
  * poll: -1 while open, -2 cancelled, else the chosen index. */
 int spartanportgpu_choice_begin(const char *title, const char *const *items, const char *const *images, int count, int focus);
 int spartanportgpu_choice_poll(void);
+/* runtime_pad.c 发布的 pad 快照(游戏线程写),由 overlay 的对话框在各自的线程上读。
+ * Android 的屏幕手柄只写 pad 状态文件,那会变成 PadData,不会产生任何 SDL 事件 —— 存档列表
+ * 否则永远看不到它。`buttons` 是注入的 PS4 按键掩码(布局与 runtime_pad.c 自己的枚举一致)。
+ * 只有这一个方向:对话框在 overlay 内部读它,所以这里不需要 getter。 */
+void spartanportgpu_pad_publish(uint32_t buttons);
 /* Confirmation with a separate preview of the new save; PNG data is decoded before returning. */
 int spartanportgpu_choice_confirm(const char *title, const char *const *items, int count, int focus,
                                  const unsigned char *png, uint64_t size, const char *caption, const char *unavailable);
