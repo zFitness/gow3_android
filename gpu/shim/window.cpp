@@ -96,13 +96,11 @@ static bool StartSize(s32& width, s32& height, SDL_DisplayID display) {
 
 WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}, height{height_} {
     // Gamepads are sampled by runtime_pad.c; their events are pumped here with the window's.
-    // 在 Android app 里(SPARTAN_ANDROID_INPUT=1)所有手柄都由 PadBridge 交给 runtime_pad.c
-    // (SPARTAN_PAD_FILE),SDL 找不到任何手柄:它每秒的热插拔扫描会加载 libudev,而 app 沙箱拒绝
-    // 该操作,于是每秒刷出一串 SELinux denial,ColorOS 上会被当成攻击行为上报。
-    // The Android app (a separate project) still sets the old name; the port's own name wins.
-    const char* android_input = std::getenv("SPARTAN_ANDROID_INPUT");
-    if (!android_input) android_input = std::getenv("GOW3_ANDROID_INPUT");
-    const bool sdl_pads = !(android_input && android_input[0] == '1');
+    // 手柄输入走 SPARTAN_PAD_FILE 文件桥时不再初始化 SDL 手柄子系统：SDL 的热插拔扫描会
+    // 加载 libudev，app 沙箱拒绝该操作，每秒刷一串 SELinux denial（ColorOS 上会被当成攻击
+    // 行为上报）。桌面玩家没有这个变量，SDL 手柄照常。物理手柄映射进 pad 文件的路径不受影响。
+    const char* pad_file = std::getenv("SPARTAN_PAD_FILE");
+    const bool sdl_pads = !(pad_file && pad_file[0]);
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO | (sdl_pads ? SDL_INIT_GAMEPAD : 0))) {
         UNREACHABLE_MSG("Failed to initialize SDL video: {}", SDL_GetError());
     }

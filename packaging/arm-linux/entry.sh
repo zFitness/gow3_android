@@ -43,9 +43,6 @@ launch_env() {
     export MESA_VK_WSI_DEBUG=sw MESA_VK_WSI_PRESENT_MODE=relaxed
     export FEXDROID_PRESENT="${FEXDROID_PRESENT:-$HOST/tmp/fxpresent.sock}"
     export SDL_JOYSTICK_HIDAPI=0
-    # SDL 手柄子系统关闭（手柄输入走 SPARTAN_PAD_FILE 文件桥）：SDL 的热插拔扫描会加载
-    # libudev，app 沙箱每秒刷 SELinux denial，ColorOS 上会被当成攻击行为上报
-    export SPARTAN_ANDROID_INPUT=1
     [ -f "$TREE/config/gport-gamecontrollerdb.txt" ] &&
         export SDL_GAMECONTROLLERCONFIG_FILE="$TREE/config/gport-gamecontrollerdb.txt"
     export PULSE_SERVER="${PULSE_SERVER:-unix:$HOST/tmp/pulse/native}" PULSE_LATENCY_MSEC=60
