@@ -30,7 +30,7 @@ import sys
 ANDROID_DEFAULT = '/Users/zhengmiao/mygitworks/gow_android_glibc'
 BASES = ('src', 'gpu', 'cpu', 'scripts', 'launcher', 'tools', 'tests', 'ci', 'packaging')
 IGNORE_DIRS = {'third_party', '__pycache__', 'out', '.git'}  # 注意：不排除 build——tools/android/build/ 是源码
-EXTS = ('.c', '.cpp', '.h', '.py', '.sh', '.cmake', '.json', '.txt', '.md', '.patch')
+EXTS = ('.c', '.cpp', '.h', '.S', '.py', '.sh', '.cmake', '.json', '.txt', '.md', '.patch')
 
 # 重放层（B 类 28 − 音频 + 附加表 9 + E 类 2）：完成后必须 ALIGNED
 REPLAY = {
@@ -117,7 +117,7 @@ SKIP_GLOBS = [
     'tools/android/lsfg-patches/*',      # LSFG 不迁（fexdroid x11-frame-generation 承担）
     'tools/android/build/build_turnip.sh',  # 驱动构建归 fexdroid（D5）
     'tools/android/build/build_lsfg.sh',
-    'tools/android/build/build_mac_arm64.sh',
+    'tools/android/build/build_mac_arm64.sh',  # Darwin 引导已折叠进 build/build_runtime.sh
     'tools/android/deploy-gport.sh',     # run-gport 链不迁（D6：PC 原链）
     'tools/android/device/*',
     'tools/android/run-gport.sh',
