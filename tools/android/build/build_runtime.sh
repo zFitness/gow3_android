@@ -16,6 +16,9 @@ set -euo pipefail
 cd -- "$(dirname -- "$0")/../../.."
 root=$PWD
 sysroot=${GPORT_ARM64_SYSROOT:-$root/.local-deps/android/arm64-sysroot}
+if [[ ! -d $sysroot && -d $root/../gow_android_glibc/.local-deps/android/arm64-sysroot ]]; then
+    sysroot=$root/../gow_android_glibc/.local-deps/android/arm64-sysroot
+fi
 headers=${GPORT_ARM64_HEADERS:-}
 if [[ -z $headers && -d $root/../gow_android_glibc/.local-deps/root/usr ]]; then
     headers=$root/../gow_android_glibc/.local-deps/root/usr
@@ -27,8 +30,9 @@ rootfs=${GPORT_ROOTFS:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}
 device_rootfs=${GPORT_RUNTIME_ROOTFS:-}
 if [[ -z $device_rootfs ]]; then
     for cand in "$root/.local-deps/android/migration/x/rootfs" \
-                "$root/../gow_android_glibc/.local-deps/android/migration/x/rootfs"; do
-        [[ -d $cand ]] && { device_rootfs=$cand; break; }
+                "$root/../gow_android_glibc/.local-deps/android/migration/x/rootfs" \
+                "$sysroot"; do
+        [[ -d $cand/usr/lib/aarch64-linux-gnu ]] && { device_rootfs=$cand; break; }
     done
 fi
 export GPORT_ARM64_SYSROOT=$sysroot
@@ -37,6 +41,30 @@ export GPORT_ROOTFS=$rootfs
 export PATH="$headers/bin:$PATH"
 
 die() { echo "build_runtime: $*" >&2; exit 1; }
+
+# macOS（Apple Silicon）引导：与 build_mac_arm64.sh 同源的 brew 依赖作用域
+# （llvm/clang、lld、boost 的 CMake 包目录）。Linux 宿主走默认工具链，不受影响。
+if [[ $(uname -s) == Darwin ]]; then
+    [[ $(uname -m) == arm64 ]] || die 'macOS build requires Apple Silicon'
+    brew_prefix() {
+        local p; p=$(brew --prefix "$1" 2>/dev/null || true)
+        [[ -n $p && -d $p ]] && { printf '%s\n' "$p"; return 0; }
+        printf '%s\n' "$2"
+    }
+    llvm_prefix=${GPORT_LLVM_PREFIX:-$(brew_prefix llvm /opt/homebrew/opt/llvm)}
+    lld_prefix=${GPORT_LLD_PREFIX:-$(brew_prefix lld /opt/homebrew/opt/lld)}
+    export PATH="$llvm_prefix/bin:$lld_prefix/bin:$PATH"
+    if [[ -z ${GPORT_BOOST_DIR:-} ]]; then
+        boost_prefix=$(brew_prefix boost /opt/homebrew/opt/boost)
+        if [[ -d $boost_prefix/lib/cmake ]]; then
+            boost_dir=$(find "$boost_prefix/lib/cmake" -maxdepth 1 -type d -name 'Boost-*' -print |
+                sort | tail -n 1)
+            [[ -n $boost_dir ]] && export GPORT_BOOST_DIR=$boost_dir
+        fi
+    fi
+    [[ -n ${GPORT_BOOST_DIR:-} ]] || die 'brew boost not found (GPORT_BOOST_DIR)'
+fi
+
 [[ -d $sysroot/usr/lib/aarch64-linux-gnu ]] || die "sysroot missing ($root/tools/android/fetch_arm64_sysroot.py): $sysroot"
 [[ -d $headers/share/cmake/tsl-robin-map ]] || die "host headers missing (Boost/robin-map/VMA/glslang): $headers"
 [[ -d $device_rootfs/usr/lib/aarch64-linux-gnu ]] || die "device rootfs (device-libs source) missing: $device_rootfs"
