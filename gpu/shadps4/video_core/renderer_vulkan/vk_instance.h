@@ -52,6 +52,18 @@ public:
     bool IsSubgroupSizeControlEnabled() const {
         return vk13_features.subgroupSizeControl;
     }
+    /// gport: device features the temporal upscaler reports as enabled.
+    bool IsMultisampleStorageImageSupported() const {
+        return features.shaderStorageImageMultisample;
+    }
+    /// gport: true when query pools can be reset from the host (vkResetQueryPool).
+    bool IsHostQueryResetSupported() const {
+        return vk12_features.hostQueryReset;
+    }
+    /// gport: true when VK_EXT_conditional_rendering is enabled (IT_SET_PREDICATION).
+    bool IsConditionalRenderingSupported() const {
+        return conditional_rendering;
+    }
 
     /// Largest VkBuffer the driver allows (2 GiB on AMD's Windows driver).
     u64 GetMaxBufferSize() const {
@@ -592,6 +604,7 @@ private:
     bool shader_clock{};
     bool pipeline_executable_properties{}; // spartanport: SPARTAN_WAVE_STATS=1 (vk_wave_stats.h)
     bool amd_shader_info{};                // spartanport: with it, VK_AMD_shader_info when present
+    bool conditional_rendering{};   // gport: VK_EXT_conditional_rendering (IT_SET_PREDICATION)
     bool compute_shader_derivatives{};
     bool mixed_float_dot_product{}; // spartanport: VK_VALVE_shader_mixed_float_dot_product (FSR 4.1.1)
     bool supports_memory_budget{};

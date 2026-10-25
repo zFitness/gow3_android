@@ -357,6 +357,68 @@ void RunEventWriteEos(Vulkan::Rasterizer& rasterizer, const u8* data) {
 }
 } // namespace
 
+static bool ShouldSkipCondExec(const PM4CmdCondExec& packet) {
+    if (packet.command.Value() != 0) {
+        LOG_WARNING(Render, "IT_COND_EXEC used a reserved command");
+    }
+    const auto* address = packet.Address();
+    auto* memory = Core::Memory::Instance();
+    const auto addr = reinterpret_cast<uintptr_t>(address);
+    if (address != nullptr && memory->IsValidGpuMapping(addr, sizeof(bool))) {
+        return *address == false;
+    }
+    LOG_WARNING(Render, "IT_COND_EXEC: invalid BOOL32 address {:#x}", addr);
+    return false;
+}
+
+void Liverpool::RestorePredicatedIndexBase() {
+    if (!saved_index_base) {
+        return;
+    }
+    regs.index_base_address.base_addr_lo = saved_index_base->first;
+    regs.index_base_address.base_addr_hi = saved_index_base->second;
+    saved_index_base.reset();
+}
+
+void RunSetPredication(Vulkan::Rasterizer& rasterizer, const u8* data) {
+    const auto* set_pred = reinterpret_cast<const PM4CmdSetPredication*>(data);
+    auto& predication = rasterizer.GetPredication();
+    const auto pred_op = set_pred->pred_op.Value();
+    const bool draw_visible = set_pred->draw_visible.Value() != 0;
+    const bool combine = set_pred->continue_predication.Value() != 0;
+    switch (pred_op) {
+    case PredicationOp::Clear:
+        predication.Disable();
+        break;
+    case PredicationOp::Zpass:
+        predication.EnableFromZpass(set_pred->Address(), draw_visible, combine);
+        break;
+    case PredicationOp::Bool64:
+    case PredicationOp::Bool32:
+        predication.EnableFromBool(set_pred->Address(), pred_op == PredicationOp::Bool64,
+                                   draw_visible, combine);
+        break;
+    default:
+        // PRIMCOUNT and unknown ops fail open so draws are never wrongly hidden.
+        LOG_WARNING(Render, "Unimplemented IT_SET_PREDICATION op {} addr={:#x}",
+                    static_cast<u32>(pred_op), set_pred->Address());
+        predication.Disable();
+        break;
+    }
+}
+
+void RunPixelPipeStat(Vulkan::Rasterizer& rasterizer, const u8* data) {
+    const auto* event = reinterpret_cast<const PM4CmdEventWrite*>(data);
+    auto& predication = rasterizer.GetPredication();
+    if (event->event_type.Value() == EventType::PixelPipeStatReset) {
+        predication.ResetZpassCounting();
+    } else if (event->event_type.Value() == EventType::PixelPipeStatControl) {
+        predication.ControlZpassCounting();
+    } else {
+        predication.DumpZpassCounters(event->Address<VAddr>());
+    }
+}
+
 void Liverpool::NotePendingFences(const auto& event) {
     const u64 position = rasterizer->DrawPipeHead();
     while (!pending_fences.empty() && rasterizer->DrawPipeReached(pending_fences.front().position)) {
@@ -753,8 +815,28 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
             dcb = NextPacket(dcb, 1);
             continue;
         case 3:
+            auto* const predication = rasterizer ? &rasterizer->GetPredication() : nullptr;
             const u32 count = header->type3.NumWords();
             const PM4ItOpcode opcode = header->type3.opcode;
+
+            packet_predicated = header->type3.predicate == PM4Predicate::PredEnable;
+
+            // A predicated draw may be skipped on the GPU, in which case hardware would also
+            // skip its index base update. Save the previous base so packets outside the
+            // predicate do not inherit a base from a draw that possibly never executed.
+            if (opcode == PM4ItOpcode::DrawIndex2) {
+                if (packet_predicated) {
+                    if (!saved_index_base) {
+                        saved_index_base.emplace(
+                            static_cast<u32>(regs.index_base_address.base_addr_lo),
+                            static_cast<u32>(regs.index_base_address.base_addr_hi));
+                    }
+                } else {
+                    saved_index_base.reset();
+                }
+            } else if (opcode == PM4ItOpcode::IndexBase) {
+                saved_index_base.reset();
+            }
             ApplyGraphicsRegisterPacket(regs, header, gfx_reg_checksum, &pipe_dirty);
             // DmaData to 0x3022C does nothing here (skipped below): no need to wait.
             if (rasterizer && !PipelinedOpcode(opcode) &&
@@ -911,10 +993,11 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 break; // registers: ApplyGraphicsRegisterPacket
             }
             case PM4ItOpcode::SetPredication: {
-                // spartanport: once; SpartanPort sets it around most draws (~1000 lines a frame).
-                static std::once_flag predication_logged;
-                std::call_once(predication_logged,
-                               [] { LOG_WARNING(Render, "Unimplemented IT_SET_PREDICATION"); });
+                RestorePredicatedIndexBase();
+                if (rasterizer && predication && predication->Enabled()) {
+                    rasterizer->RunInOrder(&RunSetPredication, header,
+                                           (header->type3.NumWords() + 1) * sizeof(u32));
+                }
                 break;
             }
             case PM4ItOpcode::IndexType: {
@@ -1121,6 +1204,15 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                           magic_enum::enum_name(event->event_index.Value()));
                 if (event->event_type.Value() == EventType::SoVgtStreamoutFlush) {
                     // registers: ApplyGraphicsRegisterPacket
+                } else if (predication && predication->Enabled() &&
+                           (event->event_type.Value() == EventType::PixelPipeStatReset ||
+                            event->event_type.Value() == EventType::PixelPipeStatControl ||
+                            (event->event_index.Value() == EventIndex::ZpassDone &&
+                             event->event_type.Value() == EventType::PixelPipeStatDump))) {
+                    if (rasterizer) {
+                        rasterizer->RunInOrder(&RunPixelPipeStat, header,
+                                               (header->type3.NumWords() + 1) * sizeof(u32));
+                    }
                 } else if (event->event_index.Value() == EventIndex::ZpassDone) {
                     if (event->event_type.Value() == EventType::PixelPipeStatDump) {
                         static constexpr u64 OcclusionCounterValidMask = 0x8000000000000000ULL;
@@ -1301,13 +1393,14 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 LOG_WARNING(Render_Vulkan, "Unimplemented IT_GET_LOD_STATS");
                 break;
             }
+            case PM4ItOpcode::PredExec: {
+                // Not implemented: the controlled region executes. Draws inside it are still
+                // wrapped in conditional rendering from the active predicate.
+                break;
+            }
             case PM4ItOpcode::CondExec: {
                 const auto* cond_exec = reinterpret_cast<const PM4CmdCondExec*>(header);
-                if (cond_exec->command.Value() != 0) {
-                    LOG_WARNING(Render, "IT_COND_EXEC used a reserved command");
-                }
-                const auto skip = *cond_exec->Address() == false;
-                if (skip) {
+                if (ShouldSkipCondExec(*cond_exec)) {
                     dcb = NextPacket(dcb,
                                      header->type3.NumWords() + 1 + cond_exec->exec_count.Value());
                     continue;
@@ -1414,10 +1507,18 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
 
         const PM4ItOpcode opcode = header->type3.opcode;
 
+        // Draw predication belongs to the graphics queue; compute queue packets execute as-is.
+        packet_predicated = false;
+
         const auto* it_body = reinterpret_cast<const u32*>(header) + 1;
         switch (opcode) {
         case PM4ItOpcode::Nop: {
             const auto* nop = reinterpret_cast<const PM4CmdNop*>(header);
+            break;
+        }
+        case PM4ItOpcode::PredExec: {
+            // Compute-queue predication is not implemented; execute the region.
+            LOG_WARNING(Render, "Compute IT_PRED_EXEC ignored; executing region");
             break;
         }
         case PM4ItOpcode::IndirectBuffer: {

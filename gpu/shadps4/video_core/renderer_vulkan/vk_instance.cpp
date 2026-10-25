@@ -275,6 +275,7 @@ bool Instance::CreateDevice() {
         vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE,
         vk::PhysicalDevicePipelineBinaryFeaturesKHR,
         vk::PhysicalDeviceMaintenance5FeaturesKHR,
+        vk::PhysicalDeviceConditionalRenderingFeaturesEXT,
         vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR>();
     features = feature_chain.get().features;
 
@@ -422,6 +423,13 @@ bool Instance::CreateDevice() {
                  image_2d_view_of_3d_features.sampler2DViewOf3D);
     }
     image_view_min_lod = add_extension(VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME);
+    // gport: IT_SET_PREDICATION emulation wraps predicated draws in conditional rendering.
+    conditional_rendering = add_extension(VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME);
+    if (conditional_rendering) {
+        conditional_rendering =
+            feature_chain.get<vk::PhysicalDeviceConditionalRenderingFeaturesEXT>().conditionalRendering;
+        LOG_INFO(Render_Vulkan, "- conditionalRendering: {}", conditional_rendering);
+    }
     supports_memory_budget = add_extension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     // spartanport: FSR 4 v07 INT8 (vk_temporal_upscaler): quad derivatives in compute shaders.
     compute_shader_derivatives = add_extension(VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME);
@@ -669,6 +677,9 @@ bool Instance::CreateDevice() {
         vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE{
             .shaderMixedFloatDotProductFloat16AccFloat32 = true,
         },
+        vk::PhysicalDeviceConditionalRenderingFeaturesEXT{
+            .conditionalRendering = true,
+        },
         vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR{
             .pipelineExecutableInfo = pipeline_executable_features.pipelineExecutableInfo,
         },
@@ -734,6 +745,9 @@ bool Instance::CreateDevice() {
     }
     if (!mixed_float_dot_product) {
         device_chain.unlink<vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>();
+    }
+    if (!conditional_rendering) {
+        device_chain.unlink<vk::PhysicalDeviceConditionalRenderingFeaturesEXT>();
     }
 
     auto [device_result, dev] = physical_device.createDeviceUnique(device_chain.get());

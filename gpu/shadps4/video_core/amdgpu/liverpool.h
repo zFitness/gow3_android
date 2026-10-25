@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdlib>
+#include <optional>
 
 #include <condition_variable>
 #include <deque>
@@ -130,6 +131,19 @@ public:
         rasterizer = rasterizer_;
     }
 
+    /// Returns true when the PM4 packet currently being processed has the predicate bit set.
+    bool IsPacketPredicated() const {
+        return packet_predicated;
+    }
+
+    /// ZPASS counter pairs (16 in Neo mode, 8 otherwise).
+    u32 CounterPairs() const {
+        return num_counter_pairs;
+    }
+
+    /// Restores the index base staged by a GPU-predicated DrawIndex2 (see the draw handler).
+    void RestorePredicatedIndexBase();
+
     template <bool wait_done = false>
     void SendCommand(auto&& func) {
         if constexpr (wait_done) {
@@ -242,6 +256,8 @@ private:
 
     VAddr indirect_args_addr{};
     u32 num_counter_pairs{};
+    bool packet_predicated{};
+    std::optional<std::pair<u32, u32>> saved_index_base{};
     u64 pixel_counter{};
 
     struct ConstantEngine {

@@ -82,7 +82,8 @@ struct UniqueBuffer {
 
 struct Buffer {
     explicit Buffer(const Vulkan::Instance& instance, VAddr cpu_addr_, u64 size_bytes_,
-                    MemoryType mem_type, std::string_view debug_name = "");
+                    MemoryType mem_type, std::string_view debug_name = "",
+                    vk::BufferUsageFlags usage = AllFlags);
 
     Buffer& operator=(const Buffer&) = delete;
     Buffer(const Buffer&) = delete;
