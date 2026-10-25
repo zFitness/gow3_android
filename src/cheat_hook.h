@@ -60,6 +60,16 @@ static inline int spartanport_cheat_signature_match(const SpartanCheatHook *hook
                                             const unsigned char *code, uint64_t size) {
     return size >= hook->length && !memcmp(code, hook->original, hook->length);
 }
+/* The image offset of the hook's site, or UINT64_MAX when the signature is missing or ambiguous
+ * or the reference bytes do not match at that site. `size` is the image size.
+ * 钩子位点在镜像中的偏移；签名缺失/歧义或引用字节不匹配时返回 UINT64_MAX。 */
+static inline uint64_t spartanport_cheat_find(const unsigned char *image, uint64_t size, const SpartanCheatHook *hook) {
+    const uint64_t at = spartanport_signature_find(image, size, &hook->site);
+    if (at == UINT64_MAX) return UINT64_MAX;
+    if (at > size || hook->length > size - at ||
+        memcmp(image + at, hook->original, hook->length)) return UINT64_MAX;
+    return at;
+}
 static inline unsigned spartanport_cheat_build_stub(unsigned char *out, const SpartanCheatHook *hook,
                                             uintptr_t flag, uintptr_t resume) {
     /* Keep the SysV red zone, GPRs and condition flags intact; no host call on the hot path. */
