@@ -1,0 +1,20 @@
+{
+  "patchFiles": {
+    "CUSA01623": "God_of_War_III_Remastered_CUSA01623.xml",
+    "CUSA01715": "God_of_War_III_Remastered_CUSA01715.xml",
+    "CUSA01720": "God_of_War_III_Remastered_CUSA01720.xml",
+    "CUSA01740": "God_of_War_III_Remastered_CUSA01740.xml"
+  },
+  "saveImportTitles": ["CUSA01740", "CUSA01715"],
+  "retailFolderIds": [
+    "CUSA01740",
+    "CUSA00900",
+    "CUSA00207",
+    "CUSA00208",
+    "CUSA00299",
+    "CUSA01363",
+    "CUSA03179",
+    "CUSA03014",
+    "CUSA03023"
+  ]
+}

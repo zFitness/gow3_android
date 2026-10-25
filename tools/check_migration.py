@@ -10,6 +10,13 @@
   SKIP      排除清单（APK/deploy/CI/驱动构建/音频等，不迁入）
   ADD       新增层待迁（参考仓独有、不在排除清单——cpu/、vk_predication 等）
 
+C 类判定修正（2026-10-25）：启动链脚本不适用"取上游"——run.py/run.sh、scripts/
+{patches,prepare,mods,save_backup,link_libc,link_modules,graphics_options}.py、
+patches/*.xml 数据集取安卓设备实证变体（launch_env.py 依赖其 checked_output，
+安卓链自洽且为旧 gport 树真机验证过的形态）；launcher/ GUI 仍取上游 2.7.0。
+launcher 契约测试（test_launcher_settings_contract/test_launcher_controls）随
+上游 launcher，6.4 真机阶段核。
+
 归一化规则与对比清单一致：spartanport_*/SPARTAN_*/gport_*/GPORT_* 统一折叠到
 gow3_*，两侧同规则归一后按字节比较。
 """
@@ -22,7 +29,7 @@ import sys
 
 ANDROID_DEFAULT = '/Users/zhengmiao/mygitworks/gow_android_glibc'
 BASES = ('src', 'gpu', 'cpu', 'scripts', 'launcher', 'tools', 'tests', 'ci', 'packaging')
-IGNORE_DIRS = {'third_party', '__pycache__', 'build', 'out', '.git'}
+IGNORE_DIRS = {'third_party', '__pycache__', 'out', '.git'}  # 注意：不排除 build——tools/android/build/ 是源码
 EXTS = ('.c', '.cpp', '.h', '.py', '.sh', '.cmake', '.json', '.txt', '.md', '.patch')
 
 # 重放层（B 类 28 − 音频 + 附加表 9 + E 类 2）：完成后必须 ALIGNED
@@ -107,6 +114,21 @@ SKIP = {
 }
 SKIP_GLOBS = [
     'tools/android/mesa-patches/*',      # 驱动补丁 → fexdroid patches/mesa
+    'tools/android/lsfg-patches/*',      # LSFG 不迁（fexdroid x11-frame-generation 承担）
+    'tools/android/build/build_turnip.sh',  # 驱动构建归 fexdroid（D5）
+    'tools/android/build/build_lsfg.sh',
+    'tools/android/build/build_mac_arm64.sh',
+    'tools/android/deploy-gport.sh',     # run-gport 链不迁（D6：PC 原链）
+    'tools/android/device/*',
+    'tools/android/run-gport.sh',
+    'tools/android/launch-gport.sh',
+    'tools/android/run-gow3.sh',
+    'tools/android/launch-gow3.sh',
+    'tests/test_android_fileprovider.py',    # APK FileProvider
+    'tests/test_android_port_layout.py',     # 旧 app 布局迁移
+    'tests/test_port_identity_data.py',      # 去硬编码属后续 change
+    'tools/check_generic.py',                # 同上
+    'gpu/patches/fsr-vulkan/0001-FSR-4*',    # 安卓改名变体；上游补丁名保持
 ]
 
 

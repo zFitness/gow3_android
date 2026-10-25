@@ -1,101 +1,134 @@
-from paths import ROOT  # noqa: F401  (puts scripts/ on the path)
-import contextlib
-import shutil
+from paths import ROOT
+import importlib.util
+import struct
+import subprocess
 import sys
-import tempfile
-import types
-import unittest
 from pathlib import Path
-from unittest import mock
+import tempfile
+import unittest
 
-import game_update
-from mods import is_link
-
-
-def write(path, content):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content)
+spec = importlib.util.spec_from_file_location('bbgame_update', ROOT / 'scripts/game_update.py')
+game_update = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(game_update)
 
 
-def no_links_but_hard_links():
-    """Simulates a network share (SMB): symlinks and junctions are refused, hard links work.
-    CreateJunction creates the directory and only then refuses the reparse point."""
-    def create_junction(src, dst):
-        Path(dst).mkdir()
-        raise PermissionError(5, 'Access is denied')
-    return (mock.patch.object(Path, 'symlink_to', side_effect=PermissionError(5, 'Access is denied')),
-            mock.patch('mods.os.name', 'nt'),
-            mock.patch.dict(sys.modules, {'_winapi': types.SimpleNamespace(CreateJunction=create_junction)}))
+def make_sfo(pairs):
+    """A minimal param.sfo (PSF) with string entries, readable by prepare.sfo."""
+    count = len(pairs)
+    header_size = 20 + 16 * count
+    keys, key_offsets = b'', []
+    for key, _ in pairs:
+        key_offsets.append(len(keys))
+        keys += key.encode() + b'\0'
+    while len(keys) % 4:
+        keys += b'\0'
+    data_start = header_size + len(keys)
+    data, entries = b'', b''
+    for (_, value), key_offset in zip(pairs, key_offsets):
+        encoded = value.encode() + b'\0'
+        while len(encoded) % 4:
+            encoded += b'\0'
+        entries += struct.pack('<HHIII', key_offset, 0x204, len(encoded), len(encoded), len(data))
+        data += encoded
+    return (b'\0PSF' + struct.pack('<IIII', 0x101, header_size, data_start, count)
+            + entries + keys + data)
 
 
 class GameUpdateTests(unittest.TestCase):
     def setUp(self):
-        self.root = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.root, True)
-        self.base, self.update, self.out = self.root / 'base', self.root / 'update', self.root / 'out'
-        write(self.base / 'eboot.bin', 'base eboot')
-        write(self.base / 'EXEC/WAD/A.WAD', 'wad')
-        write(self.base / 'sce_sys/icon0.png', 'old icon')
-        write(self.update / 'eboot.bin', 'update eboot')
-        write(self.update / 'SCE_SYS/param.sfo', 'new sfo')
-        write(self.update / 'SCE_SYS/icon0.png', 'new icon')
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.out = self.root / 'out'
+        self.base = self.make_game('CUSA01623', eboot=b'base eboot')
+        (self.base / 'sce_module/libc.prx').parent.mkdir(parents=True)
+        (self.base / 'sce_module/libc.prx').write_bytes(b'base libc')
+        (self.base / 'dvdroot_ps4/data.x.wad').parent.mkdir(parents=True)
+        (self.base / 'dvdroot_ps4/data.x.wad').write_bytes(b'base asset')
 
-    def view(self, ids=('CUSA01623', 'CUSA01623')):
-        with mock.patch('patches.game_title_id', side_effect=list(ids)):
-            return game_update.create_view(self.base, self.update, self.out)
+    def make_game(self, title, eboot=b'base eboot'):
+        game = self.root / f'{title}-base'
+        (game / 'sce_sys').mkdir(parents=True)
+        (game / 'sce_sys/param.sfo').write_bytes(make_sfo([('TITLE_ID', title), ('APP_VER', '01.02')]))
+        (game / 'eboot.bin').write_bytes(eboot)
+        return game
 
-    def test_update_files_replace_base_files_and_the_rest_stays(self):
-        view = self.view()
-        self.assertEqual((view / 'eboot.bin').read_text(), 'update eboot')
-        self.assertEqual((view / 'EXEC/WAD/A.WAD').read_text(), 'wad')
-        self.assertEqual((view / 'sce_sys/icon0.png').read_text(), 'new icon')
-        self.assertEqual((view / 'sce_sys/param.sfo').read_text(), 'new sfo')
-        self.assertEqual([p.name for p in view.iterdir() if p.name.lower() == 'sce_sys'], ['sce_sys'])
+    def make_update(self, title='CUSA01623', eboot=b'updated eboot'):
+        update = self.root / f'{title}-update'
+        (update / 'sce_sys').mkdir(parents=True)
+        (update / 'sce_sys/param.sfo').write_bytes(make_sfo([('TITLE_ID', title), ('APP_VER', '01.02')]))
+        (update / 'sce_sys/icon0.png').write_bytes(b'icon')
+        (update / 'eboot.bin').write_bytes(eboot)
+        return update
 
-    def test_folders_the_update_leaves_alone_are_linked_whole(self):
-        view = self.view()
-        self.assertTrue(is_link(view / 'EXEC'))
-        self.assertFalse(is_link(view / 'sce_sys'))  # merged: base and update files together
-
-    def test_removing_the_view_leaves_the_dumps_whole(self):
-        view = self.view()
+    def test_view_overlays_update_keeps_dumps_and_removes(self):
+        update = self.make_update()
+        view = game_update.create_view(self.base, update, self.out)
+        self.assertTrue(view.is_dir())
+        # update wins for files it has, base stays for the rest
+        self.assertEqual((view / 'eboot.bin').read_bytes(), b'updated eboot')
+        self.assertEqual((view / 'sce_sys/icon0.png').read_bytes(), b'icon')
+        self.assertEqual((view / 'sce_module/libc.prx').read_bytes(), b'base libc')
+        self.assertEqual((view / 'dvdroot_ps4/data.x.wad').read_bytes(), b'base asset')
+        # neither dump is modified
+        self.assertEqual((self.base / 'eboot.bin').read_bytes(), b'base eboot')
+        self.assertFalse((self.base / 'sce_sys/icon0.png').exists())
+        self.assertEqual((update / 'eboot.bin').read_bytes(), b'updated eboot')
+        # removing the view leaves both dumps intact
         game_update.remove_view(view)
         self.assertFalse(view.exists())
-        self.assertEqual((self.base / 'EXEC/WAD/A.WAD').read_text(), 'wad')
-        self.assertEqual((self.base / 'sce_sys/icon0.png').read_text(), 'old icon')
-        self.assertEqual((self.update / 'SCE_SYS/param.sfo').read_text(), 'new sfo')
+        self.assertEqual((self.base / 'sce_module/libc.prx').read_bytes(), b'base libc')
 
-    def test_dumps_are_not_modified(self):
-        self.view()
-        self.assertEqual((self.base / 'eboot.bin').read_text(), 'base eboot')
-        self.assertEqual((self.base / 'sce_sys/icon0.png').read_text(), 'old icon')
-
-    def test_a_network_share_without_junctions_mirrors_the_tree(self):
-        # A network share (SMB) refuses symlinks and junctions alike; only hard links work.
-        # create_view must still build a view of real files and leave the dumps untouched.
-        with contextlib.ExitStack() as stack:
-            for patcher in no_links_but_hard_links():
-                stack.enter_context(patcher)
-            view = self.view()
-        self.assertEqual((view / 'eboot.bin').read_text(), 'update eboot')
-        self.assertEqual((view / 'EXEC/WAD/A.WAD').read_text(), 'wad')          # mirrored, a real file
-        self.assertEqual((view / 'sce_sys/icon0.png').read_text(), 'new icon')  # merged over the base
-        self.assertEqual((view / 'sce_sys/param.sfo').read_text(), 'new sfo')   # added by the update
-        # the mirrored files are hard links, not copies: the dumps stay exactly as they were
-        self.assertEqual((self.base / 'EXEC/WAD/A.WAD').read_text(), 'wad')
-        self.assertEqual((self.base / 'sce_sys/icon0.png').read_text(), 'old icon')
-        game_update.remove_view(view)
-        self.assertFalse(view.exists())
-        self.assertEqual((self.base / 'EXEC/WAD/A.WAD').read_text(), 'wad')
-        self.assertEqual((self.base / 'sce_sys/icon0.png').read_text(), 'old icon')
-
-    def test_different_titles_and_nested_folders_are_refused(self):
+    def test_different_title_rejected(self):
+        update = self.make_update(title='CUSA01715')
         with self.assertRaises(ValueError):
-            self.view(('CUSA01623', 'CUSA01715'))
-        with mock.patch('patches.game_title_id', return_value='CUSA01623'):
-            with self.assertRaises(ValueError):
-                game_update.create_view(self.base, self.base / 'EXEC', self.out)
-        self.assertEqual(list(self.out.iterdir()) if self.out.exists() else [], [])
+            game_update.create_view(self.base, update, self.out)
+
+    def test_same_or_nested_folder_rejected(self):
+        with self.assertRaises(ValueError):
+            game_update.create_view(self.base, self.base, self.out)
+        nested = self.base / 'nested'
+        nested.mkdir()
+        (nested / 'eboot.bin').write_bytes(b'x')
+        (nested / 'sce_sys').mkdir()
+        (nested / 'sce_sys/param.sfo').write_bytes(
+            make_sfo([('TITLE_ID', 'CUSA01623'), ('APP_VER', '01.02')]))
+        with self.assertRaises(ValueError):
+            game_update.create_view(self.base, nested, self.out)
+
+    def test_update_without_eboot_rejected(self):
+        update = self.make_update()
+        (update / 'eboot.bin').unlink()
+        with self.assertRaises(ValueError):
+            game_update.create_view(self.base, update, self.out)
+
+    def test_other_case_update_file_replaces_base(self):
+        update = self.make_update()
+        (update / 'DVDROOT_PS4').mkdir()
+        (update / 'DVDROOT_PS4/DATA.X.WAD').write_bytes(b'upper asset')
+        view = game_update.create_view(self.base, update, self.out)
+        self.assertEqual((view / 'dvdroot_ps4/data.x.wad').read_bytes(), b'upper asset')
+
+    def test_cli_view_and_remove(self):
+        update = self.make_update()
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts/game_update.py'),
+                                 'view', str(self.base), str(update), str(self.out)],
+                                capture_output=True, text=True, check=True)
+        view = Path(result.stdout.strip())
+        self.assertTrue(view.is_dir())
+        self.assertEqual((view / 'eboot.bin').read_bytes(), b'updated eboot')
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts/game_update.py'),
+                                 'remove', str(view)], capture_output=True, text=True, check=True)
+        self.assertFalse(view.exists())
+
+    def test_cli_rejects_mismatched_titles(self):
+        update = self.make_update(title='CUSA01715')
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts/game_update.py'),
+                                 'view', str(self.base), str(update), str(self.out)],
+                                capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('not the same title', result.stderr)
+        self.assertFalse(list(self.out.glob('game-update-*')))
 
 
 if __name__ == '__main__':
