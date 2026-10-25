@@ -38,6 +38,10 @@ fi
 export GPORT_ARM64_SYSROOT=$sysroot
 export GPORT_ARM64_HEADERS=$headers
 export GPORT_ROOTFS=$rootfs
+# patch-parts 是旧效果系统（Bloodborne EFFECTS 表）的预编译缓存，SpartanPort 2.7.0
+# 同步后 patches.py 已无 EFFECTS，builder 在参考仓也已断；补丁在启动时由 run.py/
+# launch_env.py 按游戏 XML 现编译（PC 原链）。此处跳过，bundle 里留空目录。
+export GPORT_SKIP_GAME_PATCH_PARTS=${GPORT_SKIP_GAME_PATCH_PARTS:-1}
 export PATH="$headers/bin:$PATH"
 
 die() { echo "build_runtime: $*" >&2; exit 1; }
