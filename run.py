@@ -14,6 +14,9 @@ import shutil
 import subprocess
 import sys
 
+WINDOWS = sys.platform == 'win32'
+EXE_SUFFIX = '.exe' if WINDOWS else ''
+
 PORT = Path(__file__).resolve().parent
 
 
@@ -33,6 +36,8 @@ def wait_for(pid):
 
 def no_console():
     """Started without a console (the launcher): console programs must not open their own."""
+    if not WINDOWS:
+        return 0
     return 0 if ctypes.windll.kernel32.GetConsoleWindow() else subprocess.CREATE_NO_WINDOW
 
 
@@ -73,7 +78,7 @@ def main():
     data = Path(env.get('SPARTAN_DATA_DIR', PORT))
     out = data / 'out'
     out.mkdir(parents=True, exist_ok=True)
-    env.setdefault('SPARTAN_CONFIG', str(data / 'gow3.ini'))
+    env.setdefault('SPARTAN_CONFIG', str(data / 'spartanport.ini'))
     # Values this script derived on the previous start ("Apply and restart" inherits them) are
     # derived again from the new options.
     for key in env.pop('SPARTAN_DERIVED', '').split(','):
@@ -82,9 +87,12 @@ def main():
     if not env.get('SPARTAN_FSR411_DIR') and not (PORT / 'fsr4_411').is_dir() and (data / 'fsr4_411').is_dir():
         env['SPARTAN_FSR411_DIR'] = str(data / 'fsr4_411')
 
-    probe = Path(env['SPARTAN_PROBE']) if env.get('SPARTAN_PROBE') else find_executable('gow3-probe.exe')
+    # 2.6.0 的 gow3→spartanport 改名漏掉了这里（Windows 玩家也会拿到 'gow3-probe.exe not
+    # found'）；packaged 构建 ship 的是 run.py 旁的 bin/spartanport-probe。
+    probe = Path(env['SPARTAN_PROBE']) if env.get('SPARTAN_PROBE') \
+        else find_executable('spartanport-probe' + EXE_SUFFIX)
     if not probe or not probe.is_file():
-        fail('gow3-probe.exe not found: build it with build.sh (MSYS2 CLANG64) or use a packaged build.')
+        fail('spartanport-probe not found: build it with build.sh, or use a packaged build.')
     # Development builds run from the MSYS2 tree: its CLANG64 DLLs (SDL3, FFmpeg, ...).
     if not (probe.parent / 'SDL3.dll').is_file():
         clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'

@@ -1,9 +1,11 @@
 #!/system/bin/sh
 # fexdroid Runtime 包唯一契约面（verb 协议，见 my-docs/Runtime打包规范.md §5）。
-# stdout 必须是纯 JSON 的是 config/info verb；run/check 的输出进会话日志（stderr 走诊断）。
+# stdout 必须是纯 JSON 的是 config/info verb；run 的输出进会话日志（诊断走 stderr）。
 #
-# 布局自治：一切路径从本脚本位置派生（程序树根 = dirname($0)，包根 = 上一级），
-# fexdroid 注入的 FXD_ROOT/FXD_FILES/manifest env 只作覆盖，不作为存在前提。
+# 启动链本体在 run.py（上游脚本，POSIX 已修）；本脚本只负责：
+#   1. fexdroid 宿主环境块（X11/PulseAudio/显示桥/pad 文件桥/布局变量派生——run.py 不管这些）
+#   2. config/info 契约（fexdroid 卡片的表单与只读列表）
+# 布局自治：一切路径从本脚本位置派生，fexdroid 注入的 env 只作覆盖。
 set -eu
 
 TREE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)   # 程序树根（<包根>/<program>）
@@ -16,16 +18,15 @@ GAME_DIR="${SPARTAN_GAME_DIR:-}"
 HOST="${FXD_ROOT:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}"
 PAD="${SPARTAN_PAD_FILE:-${FXD_FILES:+$FXD_FILES/android-pad.state}}"
 PY=python3.13; command -v "$PY" >/dev/null 2>&1 || PY=python3
-PROBE="$TREE/arm64/bin/gport-probe"
+PROBE="$TREE/bin/spartanport-probe"
 
-# 设备实证的环境块（旧 run-gport.sh 环境段，D4/D5 退役项已剔除：无音频 FIFO、
-# 无显式 Turnip ICD——系统 Vulkan loader 自取 fexdroid rootfs 的驱动）
 launch_env() {
     mkdir -p "$DATA/user" "$DATA/logs" "$OUT" "$GHOME"
     [ -f "$CONFIG" ] || : > "$CONFIG"
     export SPARTAN_PORT_DIR="$TREE" SPARTAN_DATA_DIR="$DATA" SPARTAN_HOME="$GHOME"
     export SPARTAN_CONFIG="$CONFIG" SPARTAN_USER_DIR="$DATA/user" SPARTAN_LOG_DIR="$DATA/logs"
     [ -n "$PAD" ] && export SPARTAN_PAD_FILE="$PAD"
+    # guest glibc：桌面同款 hwcaps 关闭（FEXCore 下不受支持指令）
     export GLIBC_TUNABLES='glibc.cpu.hwcaps=-AVX2,-AVX,-AVX_Fast_Unaligned_Load,-AVX2_Usable,-AVX_Usable'
     export SDL_VIDEODRIVER=x11 DISPLAY=:0
     export MESA_VK_WSI_DEBUG=sw MESA_VK_WSI_PRESENT_MODE=relaxed
@@ -34,8 +35,9 @@ launch_env() {
     [ -f "$TREE/config/gport-gamecontrollerdb.txt" ] &&
         export SDL_GAMECONTROLLERCONFIG_FILE="$TREE/config/gport-gamecontrollerdb.txt"
     export PULSE_SERVER="${PULSE_SERVER:-unix:$HOST/tmp/pulse/native}" PULSE_LATENCY_MSEC=60
-    export LD_LIBRARY_PATH="$TREE/arm64/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    export PATH="$TREE/arm64/bin:$PATH"
+    # 打包库（rootfs 缺的 SDL3/ffmpeg 等）；bin/gpu 由 probe 的 RUNPATH 自取
+    export LD_LIBRARY_PATH="$TREE/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export PATH="$TREE/bin:$PATH"
 }
 
 verb="${1:-}"; [ $# -gt 0 ] && shift || true
@@ -44,55 +46,20 @@ case "$verb" in
 game|run)
     launch_env
     [ -n "$GAME_DIR" ] || { echo "Runtime: SPARTAN_GAME_DIR is not set" >&2; exit 2; }
-    [ -f "$GAME_DIR/eboot.bin" ] || { echo "Runtime: no eboot.bin in $GAME_DIR" >&2; exit 2; }
-    GAME="$GAME_DIR"
-    # 游戏更新叠加（SPARTAN_PATCH_DIR，规范 §10 updates 预留的现成机制）
-    if [ -n "${SPARTAN_PATCH_DIR:-}" ]; then
-        [ -f "$SPARTAN_PATCH_DIR/eboot.bin" ] || { echo "Runtime: update missing eboot.bin: $SPARTAN_PATCH_DIR" >&2; exit 2; }
-        GAME=$("$PY" "$TREE/scripts/game_update.py" view "$GAME_DIR" "$SPARTAN_PATCH_DIR" "$OUT")
-        echo "Runtime: update view: $GAME" >&2
-    fi
-    # Vulkan preflight：驱动失败必须在这里显式失败（exit 4），不得伪装成补丁校验问题
-    if ! "$PROBE" --vulkan-only >"$OUT/.vulkan-check.log" 2>&1; then
-        echo "Runtime: Vulkan initialization FAILED; last lines:" >&2
-        tail -n 20 "$OUT/.vulkan-check.log" >&2 || true
-        mv -f "$OUT/.vulkan-check.log" "$OUT/vulkan-check-last.log" 2>/dev/null || true
-        exit 4
-    fi
-    rm -f "$OUT/.vulkan-check.log"
-    # 设备实证准备链（PC run.py 的 Windows 分支不适用；序列 = 旧 run-gport.sh 核心段）
-    "$PY" "$TREE/scripts/prepare.py" "$GAME" --out "$OUT"
-    "$PY" "$TREE/scripts/link_libc.py" "$GAME" --out "$OUT"
-    "$PY" "$TREE/scripts/link_modules.py" "$GAME" --out "$OUT"
-    "$PY" "$TREE/scripts/content_profile.py" "$GAME" --out "$OUT" --sku "${SPARTAN_CONTENT_SKU:-full}"
-    mem_kb=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null || true)
-    [ -n "$mem_kb" ] && [ "$mem_kb" -gt 0 ] && : "${SPARTAN_DEVICE_MEM_MB:=$((mem_kb/1024))}" && export SPARTAN_DEVICE_MEM_MB
-    export SPARTAN_PATCHES_DIR="${SPARTAN_PATCHES_DIR:-$TREE/patches}"
-    export SPARTAN_PATCHES_CONFIG="${SPARTAN_PATCHES_CONFIG:-$DATA/patches.json}"
-    patch_env=$("$PY" "$TREE/scripts/launch_env.py" --game "$GAME" --config "$CONFIG" \
-        --state "$OUT/graphics_state.json" --out "$OUT" --base-dmem "${SPARTAN_BASE_DMEM:-7104}" --shell) ||
-        { echo "Runtime: patch preparation failed; game not started" >&2; exit 2; }
-    eval "$patch_env"
-    "$PY" "$TREE/scripts/texture_diagnostics.py" --out "$OUT/texture_integrity.json" \
-        --profile "$OUT/patch_status.json" --turnip system --dmem "${SPARTAN_DMEM_MB:-0}" \
-        --vblank "${SPARTAN_VBLANK_HZ:-60}" --vulkan-status ok || true
-    echo "Runtime: starting (DMEM ${SPARTAN_DMEM_MB:-?} MiB, vblank ${SPARTAN_VBLANK_HZ:-?} Hz)" >&2
+    export SPARTAN_PROBE="$PROBE"
     cd "$TREE"
-    exec "$PROBE" "$OUT/boot-linked.bin" \
-        --content-profile "$OUT/content.bin" --patches "$OUT/patches.bin" \
-        --app0 "$GAME" --user "$DATA/user" --timeout "${SPARTAN_TIMEOUT:-0}"
+    exec "$PY" run.py "$@"
     ;;
 launcher)
     launch_env
     if ! "$PY" -c 'import tkinter' 2>/dev/null; then
-        printf '{"error":"tkinter missing: install python3-tk into the rootfs (scripts/add-python313-tk.sh)"}\n'
+        printf '{"error":"tkinter missing: install python3-tk into the rootfs (fexdroid scripts/add-python313-tk.sh)"}\n'
         exit 3
     fi
     exec "$PY" "$TREE/launcher/spartanport_launcher_win.py"
     ;;
 check|vulkan)
     launch_env
-    # check 需要已准备的镜像；vulkan 只要驱动和显示桥
     if [ "$verb" = vulkan ]; then
         exec "$PROBE" --vulkan-only
     fi
