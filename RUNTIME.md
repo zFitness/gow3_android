@@ -37,7 +37,7 @@ APK/deploy/CI 血统。命名保持上游（`spartanport_*` / `SPARTAN_*`）。
 ## 同步上游
 
 1. `git fetch origin && git checkout runtime-arm64 && git merge origin/main`（或 rebase）
-2. 归一化比对复算（`tools/compare_upstream.py`，B 类归一规则）确认 delta 全部落在重放层清单
+2. 归一化比对复算（`tools/check_migration.py`，B 类归一规则）确认 delta 全部落在重放层清单
 3. 重放层文件逐个核对：先取上游版本，再重放安卓增量
 4. E 类逐条给出"保留并重放 / 显式失效"判定并回填证据
 5. 构建验证：ARM64 交叉构建 + 主机单测 + 真机回归（E.1 长时间游玩场景必测）
