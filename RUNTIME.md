@@ -24,6 +24,16 @@ Runtime 包（`runtime/` 目录产出 `.tar.gz`，契约见 fexdroid 仓
 （走 PC 原链 `run.py`/launcher）、Turnip/LSFG/mesa 构建（驱动归 fexdroid 仓库）、
 APK/deploy/CI 血统。命名保持上游（`spartanport_*` / `SPARTAN_*`）。
 
+## 构建（ARM64）
+
+```bash
+bash packaging/arm-linux/build.sh     # 交叉构建 + 组包 + verb 冒烟 → dist/spartanport-runtime.tar.gz
+bash packaging/arm-linux/deploy.sh    # adb 推送到 fexdroid debug app（真机调试）
+```
+
+流程与根 `build.sh` Linux 分支同构的交叉变体（差异三点：交叉工具链/sysroot、跳过 x86 宿主
+专属 ISA 源、烤入 rootfs ELF 解释器），详见 `packaging/arm-linux/README.md`。
+
 ## 来源文档
 
 - 对比清单（A–E 分类与逐文件适配点）：
