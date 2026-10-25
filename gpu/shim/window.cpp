@@ -96,12 +96,7 @@ static bool StartSize(s32& width, s32& height, SDL_DisplayID display) {
 
 WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}, height{height_} {
     // Gamepads are sampled by runtime_pad.c; their events are pumped here with the window's.
-    // 手柄输入走 SPARTAN_PAD_FILE 文件桥时不再初始化 SDL 手柄子系统：SDL 的热插拔扫描会
-    // 加载 libudev，app 沙箱拒绝该操作，每秒刷一串 SELinux denial（ColorOS 上会被当成攻击
-    // 行为上报）。桌面玩家没有这个变量，SDL 手柄照常。物理手柄映射进 pad 文件的路径不受影响。
-    const char* pad_file = std::getenv("SPARTAN_PAD_FILE");
-    const bool sdl_pads = !(pad_file && pad_file[0]);
-    if (!SDL_InitSubSystem(SDL_INIT_VIDEO | (sdl_pads ? SDL_INIT_GAMEPAD : 0))) {
+    if (!SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         UNREACHABLE_MSG("Failed to initialize SDL video: {}", SDL_GetError());
     }
     const SDL_DisplayID display = MonitorDisplay();

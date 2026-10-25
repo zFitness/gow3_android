@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "spartanport_overlay.h"
 #include "spartanport_ui_font.h"
-#include "gport_pad_input.h"
 
 #include <algorithm>
 #include <atomic>
@@ -100,9 +99,6 @@ std::atomic<int> choice_result{-1}; // -1 open, -2 cancelled, else the chosen in
 std::vector<SpartanPng::Image> choice_pictures;
 std::vector<ImTextureData*> choice_textures, choice_retired;
 std::atomic<bool> choice_retiring{false};
-// runtime_pad.c 发布的 pad 文件按键(Android 的屏幕手柄不产生任何 SDL 事件,存档列表只能靠它)。
-// 桌面的 SDL 文本框走 SDL 事件,Android 的文本输入走 app 自己的对话框,两者都不消费这个快照。
-std::atomic<u32> pad_published{0}, pad_seen{0};
 float base_scale = 1.0f;
 
 // Present rate for the FPS counter.
@@ -1793,27 +1789,6 @@ bool CapturesInput() {
     return menu_open || text_entry_active || choice_active || trophy_view;
 }
 
-void PublishPad(u32 buttons) { pad_published.store(buttons); }
-
-/* 自上次读取以来新出现的位:按下是边沿,不是 pad 文件里那种持续的电平。调用方负责让
- * `pad_seen` 跟上,所以对话框弹出时仍被按住的键不会被当成一次新的按下。 */
-u32 PadEdges() {
-    return GportPad::Edges(pad_published.load(), pad_seen);
-}
-
-
-static void ApplyChoiceAction(int move, int finish) {
-    const int count = int(choice_items.size());
-    if (move && count) {
-        choice_index = (choice_index + move + count) % count;
-    }
-    if (finish) {
-        choice_result = finish == 1 && count ? choice_index : -2;
-        choice_active = false;
-        RetireChoiceTextures();
-    }
-}
-
 void BeginChoice(const std::string& title, const std::vector<std::string>& items,
                  std::vector<SpartanPng::Image> pictures, int focus,
                  const std::string& preview_label, SpartanPng::Image preview) {
@@ -1828,30 +1803,10 @@ void BeginChoice(const std::string& title, const std::vector<std::string>& items
     choice_index = focus >= 0 && focus < int(items.size()) ? focus : 0;
     choice_result = -1;
     choice_active = true;
-    /* 列表弹出之前就被按住的键,不算对它的一次按下。 */
-    GportPad::Forget(pad_seen, pad_published.load());
 }
 
 int PollChoice() {
-    // Android 的屏幕手柄不产生 SDL 事件,所以发布的边沿在这里消费,消费方就是这个轮询线程。
-    // 桌面没有 pad 文件时 PadEdges() 恒为 0,SDL 是唯一来源 —— 两个来源不会对同一个键各动一次。
-    if (choice_active) {
-        const u32 edges = PadEdges();
-        if (edges) {
-            std::scoped_lock lock{imgui_mutex};
-            int move = 0, finish = 0;
-            GportPad::Map(edges, move, finish);
-            ApplyChoiceAction(move, finish);
-        }
-    }
     return choice_result;
-}
-
-void CancelChoice() {
-    // runtime 放弃等待了(没有任何输入源能到达列表)。列表必须真的关掉:choice_active 只要还是
-    // true,它就会继续绘制,并继续扣住游戏的输入。
-    std::scoped_lock lock{imgui_mutex};
-    if (choice_active) ApplyChoiceAction(0, 2);
 }
 
 void SetTextEntry(bool active, const std::string& prompt, const std::string& text) {

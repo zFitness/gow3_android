@@ -438,12 +438,6 @@ extern "C" int spartanportgpu_choice_poll(void) {
     return SpartanOverlay::PollChoice();
 }
 
-/* runtime_pad.c 发布的 pad 快照: overlay 的对话框(存档列表、文字输入)在各自的线程上读它。
- * Android 的屏幕手柄只写 pad 状态文件,不产生 SDL 事件,对话框只能靠这份快照听到按键。 */
-extern "C" void spartanportgpu_pad_publish(uint32_t buttons) {
-    SpartanOverlay::PublishPad(buttons);
-}
-
 extern "C" int spartanportgpu_choice_confirm(const char* title, const char* const* items, int count, int focus,
                                            const unsigned char* png, uint64_t size, const char* caption, const char* unavailable) {
     if (!g_window || !items || count <= 0) return 0;

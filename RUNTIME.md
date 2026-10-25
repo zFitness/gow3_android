@@ -16,7 +16,7 @@ Runtime 包（`runtime/` 目录产出 `.tar.gz`，契约见 fexdroid 仓
 | 层 | 内容 | 与上游关系 |
 |---|---|---|
 | 重放层 | 安卓适配增量（B 类）与仅存于安卓线的缺陷修复（E 类） | 叠加在上游文件上，sync 时先取上游再重放 |
-| 新增层 | 上游无对应物的 ARM64 必需文件（`cpu/`、`src/gport_guest_cpu.h`、`src/gport_runtime_cpu.c`、`gpu/shadps4/.../vk_predication.*`、`gpu/shim/gport_pad_input.h`、ARM64 构建链、`third_party/FEX`） | 独立文件，安卓独有符号用 `gport_` 前缀 |
+| 新增层 | 上游无对应物的 ARM64 必需文件（`cpu/`、`src/gport_guest_cpu.h`、`src/gport_runtime_cpu.c`、`gpu/shadps4/.../vk_predication.*`、`gpu/shim/entry 契约`、ARM64 构建链、`third_party/FEX`） | 独立文件，安卓独有符号用 `gport_` 前缀 |
 | 打包层 | `runtime/`（runtime.json、entry.sh、pack.py、assets） | 与上游树完全隔离 |
 
 共享文件（上游有对应物者）MUST 与上游字节级一致（重放层文件除外）。

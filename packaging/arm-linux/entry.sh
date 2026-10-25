@@ -17,7 +17,6 @@ OUT="$DATA/out"
 # 调试期缺省：共享存储的游戏 dump（fexdroid 注入 manifest env 后此处仅为兜底）
 GAME_DIR="${SPARTAN_GAME_DIR:-/storage/emulated/0/Download/games/ps4/GOW3 ROM/CUSA01740}"
 HOST="${FXD_ROOT:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}"
-PAD="${SPARTAN_PAD_FILE:-${FXD_FILES:+$FXD_FILES/android-pad.state}}"
 PY=python3.13; command -v "$PY" >/dev/null 2>&1 || PY=python3
 PROBE="$TREE/bin/spartanport-probe"
 # python 统一走显式 loader（烤入的解释器路径在跨 app/无会话场景不可靠；旧链同款模式）。
@@ -36,7 +35,6 @@ launch_env() {
     [ -f "$CONFIG" ] || : > "$CONFIG"
     export SPARTAN_PORT_DIR="$TREE" SPARTAN_DATA_DIR="$DATA" SPARTAN_HOME="$GHOME"
     export SPARTAN_CONFIG="$CONFIG" SPARTAN_USER_DIR="$DATA/user" SPARTAN_LOG_DIR="$DATA/logs"
-    [ -n "$PAD" ] && export SPARTAN_PAD_FILE="$PAD"
     # guest glibc：桌面同款 hwcaps 关闭（FEXCore 下不受支持指令）
     export GLIBC_TUNABLES='glibc.cpu.hwcaps=-AVX2,-AVX,-AVX_Fast_Unaligned_Load,-AVX2_Usable,-AVX_Usable'
     export SDL_VIDEODRIVER=x11 DISPLAY=:0

@@ -35,8 +35,6 @@ EXTS = ('.c', '.cpp', '.h', '.S', '.py', '.sh', '.cmake', '.json', '.txt', '.md'
 # 重放层（B 类 28 − 音频 + 附加表 9 + E 类 2）：完成后必须 ALIGNED
 REPLAY = {
     'src/probe.c',
-    'src/runtime_services.c',
-    'src/runtime_pad.c',
     'src/runtime_thread.c',
     'src/runtime_kernel.c',
     'src/runtime.c',
@@ -62,10 +60,8 @@ REPLAY = {
     'gpu/shadps4/video_core/renderer_vulkan/vk_swapchain.cpp',
     'gpu/shadps4/video_core/renderer_vulkan/vk_presenter.cpp',
     'gpu/shadps4/video_core/renderer_vulkan/vk_pipeline_serialization.cpp',
-    'gpu/shim/spartanport_overlay.cpp',
     'gpu/shim/spartanportgpu.cpp',
     'gpu/shim/spartanport_write_log.cpp',
-    'gpu/shim/window.cpp',
     'gpu/shim/spartanport_settings.h',
     'gpu/spartanportgpu.h',
     'scripts/game_update.py',
@@ -77,6 +73,13 @@ REPLAY = {
 # 排除清单：不迁入（驱动归 fexdroid、APK/deploy/CI 血统、音频、LSFG、run-gport 链）
 SKIP = {
     'src/runtime_audio.c',  # 音频：走系统 PulseAudio，保持上游（永久 UPSTREAM）
+    'gpu/shim/gport_pad_input.h',   # pad 文件桥退役（SDL 直识别），不迁
+    'tests/test_pad_input.cpp',     # 同上
+    'tests/test_android_1740_patches.py',   # 上游 HEAD 自身的破损测试（引用已删目录），一并去除
+    'tests/test_android_build_inputs.py',
+    'tests/test_android_runtime_archive.py',
+    'tests/test_android_runtime_elf.py',
+    'tests/test_android_turnip_selection.py',
     'build.sh',             # 保持上游（PC 路径原样）；ARM64 交叉构建由 tools/android/build_arm64.sh
                             # 承载——参考仓 build.sh 的增量是旧安卓流程残留（GOW3_PGO/gow3gpu 旧
                             # 命名与已对齐的 gpu/CMakeLists.txt 不匹配，且删除 x86 宿主 ISA 编译）
@@ -113,6 +116,7 @@ SKIP = {
     'tests/test_lsfg_launch_contract.py',
 }
 SKIP_GLOBS = [
+    'tools/android/*',                   # 整目录已收敛进 packaging/arm-linux/（构建/打包/部署）
     'tools/android/mesa-patches/*',      # 驱动补丁 → fexdroid patches/mesa
     'tools/android/lsfg-patches/*',      # LSFG 不迁（fexdroid x11-frame-generation 承担）
     'tools/android/build/build_turnip.sh',  # 驱动构建归 fexdroid（D5）
@@ -132,14 +136,15 @@ SKIP_GLOBS = [
 ]
 
 
+# 已回退到上游（2026-10-25 用户决策：fexdroid 使 SDL 直接识别手柄/键盘，
+# pad 文件桥 + 存档超时补丁 + pad 快照管道整套退役，对照 windows-v2.7.0 tag）：
+#   runtime_pad.c / runtime_services.c / spartanport_overlay.cpp/.h / spartanportgpu.h
 # 部分重放（有意只重放部分增量，与参考仓永久不同）：
-#   runtime_services.c        只重放存档列表超时（IME 文件桥不迁，fexdroid 走 X11 键盘）
-#   spartanportgpu.cpp        只重放 pad_publish + 修复标记（text_input 两侧本就一致）
-#   spartanport_overlay.cpp   只重放 pad 快照管道 + CancelChoice（PollMenuShortcut 安卓门控不迁，D9）
+#   spartanportgpu.cpp   只重放修复标记（pad_publish 随文件桥退役移除；text_input 两侧一致）
 PARTIAL = {
-    'src/runtime_services.c',
-    'gpu/shim/spartanportgpu.cpp',
-    'gpu/shim/spartanport_overlay.cpp',
+    'gpu/shim/spartanportgpu.cpp',   # 仅修复标记（pad_publish 随文件桥退役移除）
+    'gpu/shim/window.cpp',           # 仅直送桥集成（pad 门控回退上游，SDL 直接识别手柄）
+    'gpu/spartanportgpu.h',          # 仅 pad_publish 声明移除
 }
 
 
