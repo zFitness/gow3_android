@@ -196,7 +196,11 @@ static bool SDLCALL mouse_watch(void *userdata, SDL_Event *event) {
         return true;
     }
     if (event->type!=SDL_EVENT_MOUSE_WHEEL) return true;
-    int steps=event->wheel.integer_y;
+    /* gport: SDL 3.2 before 3.2.12 has no integer_y, so the float scroll is accumulated here. */
+    static float wheel_accum=0.0f;
+    wheel_accum+=event->wheel.y;
+    int steps=(int)wheel_accum;
+    wheel_accum-=(float)steps;
     if (event->wheel.direction==SDL_MOUSEWHEEL_FLIPPED) steps=-steps;
     SDL_AtomicInt *ticks=&wheel_ticks[steps<0];
     for (int n=steps<0 ? -steps : steps; n>0 && SDL_GetAtomicInt(ticks)<WHEEL_MAX_PENDING; --n) SDL_AddAtomicInt(ticks,1);
@@ -508,9 +512,41 @@ static void sample_host(PadData *d) {
  * options touchpad touchpad_left touchpad_right up down left right) are held while listed;
  * touchpad is the left side; lx= ly= rx= ry= (0..255) override the sticks. An empty file
  * releases everything. */
-static struct { uint32_t buttons; int stick[4]; } injected={0,{-1,-1,-1,-1}};
+static struct { uint32_t buttons; int stick[4]; int trigger[2]; } injected={0,{-1,-1,-1,-1},{-1,-1}};
 static int replay_armed;      /* 1 while a SPARTAN_PAD_REPLAY recording plays, 2 once it ended */
 static uint64_t replay_start; /* 0: (re)start at the next sample */
+/* gport: the injected button state is decoded into readable names and printed only when it
+ * changes. SPARTAN_PAD_QUIET=1 (the Android default, see run-gport.sh) keeps it silent: the
+ * on-screen gamepad rewrites the pad file every frame and the log would drown the real errors.
+ * Quiet only affects the log, not the injection itself. */
+static void log_pad_state(void) {
+    static int quiet = -1; /* -1: not probed yet */
+    static uint32_t last_buttons; static int last_stick[4], last_trigger[2]; static int have_last;
+    if (quiet < 0) {
+        const char *q = getenv("SPARTAN_PAD_QUIET");
+        quiet = (q && q[0] == '1') ? 1 : 0;
+    }
+    if (quiet) return;
+    if (have_last && injected.buttons == last_buttons &&
+        injected.stick[0] == last_stick[0] && injected.stick[1] == last_stick[1] &&
+        injected.stick[2] == last_stick[2] && injected.stick[3] == last_stick[3] &&
+        injected.trigger[0] == last_trigger[0] && injected.trigger[1] == last_trigger[1]) return;
+    have_last = 1;
+    last_buttons = injected.buttons;
+    for (int i = 0; i < 4; ++i) last_stick[i] = injected.stick[i];
+    last_trigger[0] = injected.trigger[0]; last_trigger[1] = injected.trigger[1];
+    char names[160] = "";
+    for (size_t i = 0; i < sizeof(ps_names) / sizeof(*ps_names); ++i) {
+        if (injected.buttons & ps_names[i].ps) {
+            if (names[0]) strncat(names, " ", sizeof(names) - strlen(names) - 1);
+            strncat(names, ps_names[i].name, sizeof(names) - strlen(names) - 1);
+        }
+    }
+    printf("Runtime: pad file: buttons %s sticks %d %d %d %d l2=%d r2=%d\n",
+           names[0] ? names : "none",
+           injected.stick[0], injected.stick[1], injected.stick[2], injected.stick[3],
+           injected.trigger[0], injected.trigger[1]);
+}
 static void read_inject(void) {
     static const char *path; static int checked; static uint64_t last_check; static struct timespec mtime;
     if (!checked) { path=getenv("SPARTAN_PAD_FILE"); checked=1; }
@@ -531,17 +567,21 @@ static void read_inject(void) {
     FILE *f=fopen(path,"r");
     if (!f) return;
     static const char *sticks[]={"lx=","ly=","rx=","ry="};
+    /* gport: the Android PadBridge skips the l2/r2 tokens when the trigger value is above 0 and
+     * writes the analog value instead. */
+    static const char *triggers[]={"l2=","r2="};
     injected.buttons=0;
     for (int i=0;i<4;++i) injected.stick[i]=-1;
+    for (int i=0;i<2;++i) injected.trigger[i]=-1;
     char token[64];
     while (fscanf(f,"%63s",token)==1) {
         if (!strcmp(token,"replay") && replay_armed!=1) { replay_armed=1; replay_start=0; } /* SPARTAN_PAD_REPLAY */
         for (size_t i=0;i<sizeof(ps_names)/sizeof(*ps_names);++i) if (!strcmp(token,ps_names[i].name)) injected.buttons|=ps_names[i].ps;
         for (int i=0;i<4;++i) if (!strncmp(token,sticks[i],3)) { int v=atoi(token+3); injected.stick[i]=v<0 ? 0 : v>255 ? 255 : v; }
+        for (int i=0;i<2;++i) if (!strncmp(token,triggers[i],3)) { int v=atoi(token+3); injected.trigger[i]=v<0 ? 0 : v>255 ? 255 : v; }
     }
     fclose(f);
-    printf("Runtime: pad file: buttons 0x%x sticks %d %d %d %d\n",injected.buttons,
-           injected.stick[0],injected.stick[1],injected.stick[2],injected.stick[3]);
+    log_pad_state();
 }
 /* SPARTAN_PAD_RECORD=<file>: F9 starts and stops recording the pad state (gamepad or keyboard) with
  * the time since F9; SPARTAN_PAD_REPLAY=<file> plays such a recording back, started by the token
@@ -714,13 +754,26 @@ static void engine_fps_combo(PadData *d) {
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
+    /* gport: the pad file is read (and published to the overlay) even while the overlay captures
+     * the input: on Android that file is the only way the save list and the text box hear a
+     * press. What the overlay captured is withheld from the game below, so one key is never taken
+     * twice. */
+    read_inject();
+    spartanportgpu_pad_publish(injected.buttons);
     if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
-    read_inject();
     replay_sample(d);
     d->buttons|=injected.buttons;
     if (injected.buttons & BTN_L2) d->l2=255;
     if (injected.buttons & BTN_R2) d->r2=255;
+    /* The binary tokens are already covered by the 255 above, the numeric ones fill the rest. */
+    if (injected.trigger[0]>0 && d->l2<injected.trigger[0]) d->l2=(uint8_t)injected.trigger[0];
+    if (injected.trigger[1]>0 && d->r2<injected.trigger[1]) d->r2=(uint8_t)injected.trigger[1];
+    /* Like the physical gamepad path in sample_host(): an analog trigger above the threshold also
+     * sets the digital button bit, otherwise the Android on-screen gamepad (which only writes the
+     * l2=/r2= values) would never trigger the actions that answer to the digital bits. */
+    if (d->l2>30) d->buttons|=BTN_L2;
+    if (d->r2>30) d->buttons|=BTN_R2;
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
     apply_combos(d);
