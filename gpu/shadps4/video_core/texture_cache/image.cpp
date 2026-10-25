@@ -33,9 +33,14 @@ static vk::ImageUsageFlags ImageUsageFlags(const Vulkan::Instance& instance,
                 usage |= vk::ImageUsageFlagBits::eAttachmentFeedbackLoopEXT;
             }
             // Always create images with storage flag to avoid needing re-creation in case of e.g
-            // compute clears This sacrifices a bit of performance but is less work. ExtendedUsage
-            // flag is also used.
-            usage |= vk::ImageUsageFlagBits::eStorage;
+            // compute clears. This sacrifices a bit of performance but is less work. ExtendedUsage
+            // flag is also used. The exception is multisample images when storage is not supported
+            // (shaderStorageImageMultisample): with ExtendedUsage a driver that cannot store to a
+            // multisample image may return only one supported sample, losing the MSAA render.
+            // Adreno 830 + Turnip 实证：无条件 eStorage 会损坏 MSAA 渲染目标（主菜单人物缺失/
+            // 贴图方块），见 gow3_pc my-docs/archive/gow3/texture-block-artifacts-debug-2026-10-14.md。
+            if (info.num_samples == 1 || instance.IsMultisampleStorageImageSupported())
+                usage |= vk::ImageUsageFlagBits::eStorage;
         }
     } else {
         // Similarly to above, we specify storage usage. This is typically not supported by
