@@ -168,6 +168,7 @@ install -m755 "$out/bin/spartanport-probe" "$stage/bin/"
 install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$stage/bin/gpu/"
 cp -R "$out/lib/." "$stage/lib/"
 install -m755 packaging/arm-linux/entry.sh "$stage/entry.sh"
+install -m644 packaging/arm-linux/entry_main.py "$stage/entry_main.py"
 install -m644 run.py "$stage/"
 cp -R scripts "$stage/scripts"
 find "$stage/scripts" -name __pycache__ -prune -exec rm -r {} + 2>/dev/null || true

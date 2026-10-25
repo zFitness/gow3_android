@@ -7,22 +7,13 @@ cd -- "$(dirname -- "$0")/../.."
 PKG=${FXD_PACKAGE:-ro.cobrabm.fexdroid}
 NAME=${1:-spartanport}
 STAGE=out/arm64-linux/pkg
-STAGING=/sdcard/local/tmp/sp-runtime
-FILES=/data/user/0/$PKG/files
 ADB=(adb); [[ -n ${ANDROID_SERIAL:-} ]] && ADB+=(-s "$ANDROID_SERIAL")
 [[ -f $STAGE/runtime.json ]] || { echo "no package: $STAGE (run packaging/arm-linux/build.sh)" >&2; exit 1; }
 
-echo ">> push 中转：$STAGE → $STAGING"
-"${ADB[@]}" shell mkdir -p "$STAGING"
-tar -C "$STAGE" -cf - . | "${ADB[@]}" shell "cat > $STAGING/pkg.tar"
-echo ">> run-as 拷入：files/imports/$NAME"
-"${ADB[@]}" shell run-as "$PKG" sh -c "
-    mkdir -p 'files/imports/$NAME/gdata' 'files/imports/$NAME/home/$NAME' &&
-    rm -rf 'files/imports/$NAME/gport' &&
-    (cd '$STAGING' && tar -xf pkg.tar) &&
-    mv '$STAGING/gport' 'files/imports/$NAME/gport' &&
-    mv '$STAGING/runtime.json' 'files/imports/$NAME/runtime.json' &&
-    rm -rf '$STAGING'"
+echo ">> run-as 直装：files/imports/$NAME"
+tar -C "$STAGE" -cf - . | "${ADB[@]}" exec-in run-as "$PKG" sh -c \
+  "mkdir -p 'files/imports/$NAME/gdata' 'files/imports/$NAME/home/$NAME' && cd 'files/imports/$NAME' && rm -rf gport runtime.json assets && tar -xf -"
+
 echo ">> 完成。fexdroid Runner 自定义程序："
 echo "   程序 = <rootfs>/bin/sh   参数 = imports/$NAME/gport/entry.sh game"
-echo "   （或者建一个 wrapper 脚本烤 SPARTAN_GAME_DIR；真机首跑看 files/imports/$NAME/gdata/logs/）"
+echo "   （首跑诊断：files/imports/$NAME/gdata/logs/；entry.sh 的 Vulkan preflight 失败 exit 4）"
