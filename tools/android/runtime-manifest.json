@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "profile": "release",
+  "application_id": "com.gow3.android",
+  "java_package": "ro.cobrabm.fexdroid",
+  "target_sdk": 28,
+  "abi": "arm64-v8a",
+  "files_dir": "/data/user/0/{application_id}/files",
+  "runtime_root": "rootfs",
+  "port_root": "gport",
+  "port_arch_root": "gport/arm64",
+  "home_root": "home",
+  "guest_home_root": "home/gport",
+  "data_root": "gdata",
+  "config_name": "gport.ini",
+  "launch_script": "run-gport.sh",
+  "default_config_name": "gport.default.ini",
+  "fex_config_name": "gport-fex-compatible.json",
+  "pad_db_name": "gport-gamecontrollerdb.txt",
+  "top_level_roots": ["rootfs", "gport", "home"],
+  "required_directories": ["home/gport", "gport/scripts", "gport/patches", "gport/arm64/lsfg"],
+  "loader": "rootfs/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+  "loader_strategy": "explicit-loader-when-PT_INTERP-slot-cannot-fit",
+  "entrypoints": [
+    {
+      "path": "rootfs/usr/libexec/fxshmd",
+      "owner": "java",
+      "kind": "arm64-elf",
+      "launch_via_loader": true,
+      "args": ["--dir", "rootfs/tmp/.fxshm"]
+    },
+    {
+      "path": "rootfs/usr/bin/Xvfb",
+      "owner": "java",
+      "kind": "arm64-elf",
+      "launch_via_loader": true,
+      "args": [":0", "-screen", "0", "1280x720x24", "-shmem", "-ac", "-nolisten", "tcp", "-pn"]
+    },
+    {
+      "path": "rootfs/usr/bin/python3.13",
+      "owner": "run-gport.sh",
+      "kind": "arm64-elf",
+      "launch_via_loader": true,
+      "args": ["gport/scripts/prepare.py"]
+    },
+    {
+      "path": "gport/arm64/bin/gport-probe",
+      "owner": "run-gport.sh",
+      "kind": "arm64-elf",
+      "launch_via_loader": true,
+      "args": ["--vulkan-only", "--cpu-only"]
+    },
+    {
+      "path": "gport/arm64/bin/kgsl-chip-id",
+      "owner": "run-gport.sh",
+      "kind": "arm64-elf",
+      "launch_via_loader": true,
+      "args": []
+    },
+    {
+      "path": "rootfs/usr/bin/FEX",
+      "owner": "gport-probe",
+      "kind": "arm64-elf",
+      "launch_via_loader": true,
+      "args": []
+    },
+    {
+      "path": "gport/run-gport.sh",
+      "owner": "java",
+      "kind": "shell",
+      "launch_via_loader": false,
+      "args": ["game", "cpu", "check", "vulkan"]
+    }
+  ],
+  "required_paths": [
+    {"path": "rootfs/usr/bin/Xvfb", "type": "executable"},
+    {"path": "rootfs/usr/bin/sh", "type": "executable"},
+    {"path": "rootfs/usr/libexec/fxshmd", "type": "executable"},
+    {"path": "rootfs/usr/bin/FEX", "type": "executable"},
+    {"path": "rootfs/usr/bin/python3.13", "type": "executable"},
+    {"path": "rootfs/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1", "type": "loader"},
+    {"path": "rootfs/usr/lib/aarch64-linux-gnu/libvulkan_freedreno.so", "type": "shared-library"},
+    {"path": "rootfs/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json", "type": "data"},
+    {"path": "rootfs/usr/lib/aarch64-linux-gnu/libvulkan_freedreno_gen8.so", "type": "shared-library"},
+    {"path": "rootfs/usr/share/vulkan/icd.d/freedreno_gen8_icd.aarch64.json", "type": "data"},
+    {"path": "gport/arm64/bin/gport-probe", "type": "executable"},
+    {"path": "gport/arm64/bin/kgsl-chip-id", "type": "executable"},
+    {"path": "gport/arm64/lib/libgportcpu.so", "type": "shared-library"},
+    {"path": "gport/arm64/lib/libgportgpu.so", "type": "shared-library"},
+    {"path": "gport/arm64/lsfg/liblsfg-vk.so", "type": "shared-library"},
+    {"path": "gport/arm64/lsfg/VkLayer_LS_frame_generation.json", "type": "data"},
+    {"path": "gport/run-gport.sh", "type": "executable"},
+    {"path": "gport/scripts/launch_env.py", "type": "data"},
+    {"path": "gport/scripts/patches.py", "type": "data"},
+    {"path": "gport/scripts/content_profile.py", "type": "data"},
+    {"path": "gport/scripts/game_identity.py", "type": "data"},
+    {"path": "gport/scripts/game_update.py", "type": "data"},
+    {"path": "gport/scripts/texture_diagnostics.py", "type": "data"},
+    {"path": "gport/scripts/graphics_options.py", "type": "data"},
+    {"path": "gport/scripts/link_libc.py", "type": "data"},
+    {"path": "gport/scripts/link_modules.py", "type": "data"},
+    {"path": "gport/scripts/mods.py", "type": "data"},
+    {"path": "gport/scripts/prepare.py", "type": "data"},
+    {"path": "gport/scripts/prepare_game.py", "type": "data"},
+    {"path": "gport/scripts/save_backup.py", "type": "data"},
+    {"path": "gport/patches/God_of_War_III_Remastered_CUSA01623.xml", "type": "data"},
+    {"path": "gport/patches/God_of_War_III_Remastered_CUSA01715.xml", "type": "data"},
+    {"path": "gport/patches/God_of_War_III_Remastered_CUSA01720.xml", "type": "data"},
+    {"path": "gport/patches/God_of_War_III_Remastered_CUSA01740.xml", "type": "data"},
+    {"path": "gport/gport-fex-compatible.json", "type": "data"},
+    {"path": "gport/gport.default.ini", "type": "data"},
+    {"path": "gport/gport-gamecontrollerdb.txt", "type": "data"}
+  ],
+  "environment": {
+    "FXD_FILES": "{files_dir}",
+    "FXD_ROOT": "{files_dir}/rootfs",
+    "LD_LIBRARY_PATH": "{files_dir}/gport/arm64/lib:{files_dir}/rootfs/usr/lib/aarch64-linux-gnu:{files_dir}/rootfs/usr/lib/aarch64-linux-gnu/pulseaudio:{files_dir}/rootfs/usr/lib",
+    "PATH": "{files_dir}/rootfs/usr/bin:{files_dir}/rootfs/bin:/system/bin",
+    "TMPDIR": "{files_dir}/rootfs/tmp",
+    "XDG_RUNTIME_DIR": "{files_dir}/rootfs/tmp"
+  },
+  "turnip_variants": [
+    "rootfs/usr/lib/aarch64-linux-gnu/libvulkan_freedreno.so",
+    "rootfs/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json",
+    "rootfs/usr/lib/aarch64-linux-gnu/libvulkan_freedreno_gen8.so",
+    "rootfs/usr/share/vulkan/icd.d/freedreno_gen8_icd.aarch64.json"
+  ],
+  "forbidden_archive_fragments": [
+    "com.gp.android",
+    "eboot.bin",
+    "eboot.elf",
+    "sce_module",
+    "sce_sys",
+    "boot-linked.bin",
+    "save/"
+  ],
+  "legacy_layout": [
+    "gport/bin",
+    "gport/lib"
+  ],
+  "game_content_policy": "external-only"
+}

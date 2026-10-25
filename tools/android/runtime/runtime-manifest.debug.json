@@ -1,0 +1,4 @@
+{
+  "profile": "debug",
+  "profile_note": "Debug payload reuses local Turnip, Gen8 Turnip and LSFG inputs without building them; Steam libraries are also reused when present in .local-deps/android/steam-libs."
+}
