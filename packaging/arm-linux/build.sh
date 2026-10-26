@@ -179,8 +179,6 @@ for name in gport-fex-compatible.json gport-gamecontrollerdb.txt gport-packages.
     [[ -f packaging/arm-linux/config/$name ]] && install -m644 "packaging/arm-linux/config/$name" "$stage/config/"
 done
 install -m644 packaging/arm-linux/port.json "$stage/../port.json"
-install -m755 packaging/arm-linux/launch.sh "$stage/../launch.sh"
-install -m755 packaging/arm-linux/launcher.sh "$stage/../launcher.sh"
 mkdir -p "$stage/../assets"
 [[ -f packaging/arm-linux/assets/cover.png ]] && install -m644 packaging/arm-linux/assets/cover.png "$stage/../assets/cover.png"
 
@@ -206,7 +204,7 @@ echo "    verb smoke OK"
 
 mkdir -p "$dist"
 # macOS tar 会把 APFS 扩展属性打成 ._ 文件——Port 包必须干净
-COPYFILE_DISABLE=1 tar --exclude='._*' -czf "$dist/spartanport-port.tar.gz" -C "$out/pkg" port.json launch.sh launcher.sh assets "$program"
+COPYFILE_DISABLE=1 tar --exclude='._*' -czf "$dist/spartanport-port.tar.gz" -C "$out/pkg" port.json assets "$program"
 end_stage "$dist/spartanport-port.tar.gz ($(du -m "$dist/spartanport-port.tar.gz" | cut -f1) MB)"
 
 printf '\nPort package ready: %s\n' "$dist/spartanport-port.tar.gz"
