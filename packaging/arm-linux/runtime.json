@@ -33,7 +33,7 @@
   "requires": { "python": "3.13" },
   "storage": { "data": "gdata", "home": "home/gport" },
   "env": {
-    "SPARTAN_GAME_DIR": "/storage/emulated/0/Download/games/ps4/GOW3 ROM/CUSA01740"
+    "SPARTAN_GAME_DIR": "/storage/emulated/0/games/ps4/GOW3 ROM/CUSA01740"
   },
   "assets": { "cover": "assets/cover.png" }
 }
