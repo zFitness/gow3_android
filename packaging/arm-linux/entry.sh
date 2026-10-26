@@ -18,7 +18,7 @@ OUT="$DATA/out"
 # 调试期缺省：共享存储的游戏 dump（fexdroid 注入 manifest env 后此处仅为兜底）
 # 游戏目录优先级：env > ini 的 game_dir 配置项（config file 项，§7）> 烤入缺省
 _ini_dir=""; [ -f "$CONFIG" ] && _ini_dir=$(sed -n 's/^game_dir=//p' "$CONFIG" | tail -1)
-GAME_DIR="${SPARTAN_GAME_DIR:-${_ini_dir:-/storage/emulated/0/games/ps4/GOW3 ROM/CUSA01740}}"
+GAME_DIR="${SPARTAN_GAME_DIR:-${_ini_dir:-/storage/emulated/0/Download/games/ps4/GOW3 ROM/CUSA01740}}"
 HOST="${FXD_ROOT:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}"
 PY=python3.13; command -v "$PY" >/dev/null 2>&1 || PY=python3
 BIN="$TREE/bin"
