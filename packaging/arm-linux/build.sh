@@ -195,7 +195,8 @@ for bad in libvulkan_freedreno freedreno_icd liblsfg VkLayer_LS eboot.bin eboot.
 done
 
 # verb 冒烟（无设备：config/info 走 python，stdout 必须是合法 JSON）
-export SPARTAN_DATA_DIR=$out/pkg/gdata SPARTAN_HOME=$out/pkg/home/$program FXD_ROOT=/nonexistent
+home_dir=$out/pkg/home/$program
+export SPARTAN_HOME=$home_dir SPARTAN_DATA_DIR=$home_dir FXD_ROOT=/nonexistent
 mkdir -p "$SPARTAN_DATA_DIR" "$SPARTAN_HOME"
 ( cd "$out/pkg" && sh "./$program/entry.sh" config schema | python3 -m json.tool >/dev/null \
   && sh "./$program/entry.sh" config get | python3 -m json.tool >/dev/null \

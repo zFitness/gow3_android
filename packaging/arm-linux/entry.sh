@@ -10,8 +10,9 @@ set -eu
 
 TREE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)   # 程序树根（<包根>/<program>）
 PKG=$(dirname "$TREE")                               # 包根
-DATA="${SPARTAN_DATA_DIR:-$PKG/gdata}"
+# 用户数据统一 HOME（单一备份/导出单元，2026-10-26 起 gdata 布局退役）
 GHOME="${SPARTAN_HOME:-$PKG/home/gport}"
+DATA="$GHOME"
 CONFIG="${SPARTAN_CONFIG:-$DATA/spartanport.ini}"
 OUT="$DATA/out"
 # 调试期缺省：共享存储的游戏 dump（fexdroid 注入 manifest env 后此处仅为兜底）
@@ -36,6 +37,13 @@ py_exec() {
 
 launch_env() {
     mkdir -p "$DATA/user" "$DATA/logs" "$OUT" "$GHOME"
+    # 旧 gdata 布局一次性并入 HOME（存档/配置优先，不覆盖新数据）
+    if [ -d "$PKG/gdata" ] && [ ! -e "$DATA/.gdata-migrated" ]; then
+        cp -R "$PKG/gdata/user/." "$DATA/user/" 2>/dev/null || true
+        cp -f "$PKG/gdata/spartanport.ini" "$DATA/" 2>/dev/null || true
+        cp -R "$PKG/gdata/logs/." "$DATA/logs/" 2>/dev/null || true
+        : > "$DATA/.gdata-migrated"
+    fi
     [ -f "$CONFIG" ] || : > "$CONFIG"
     export SPARTAN_PORT_DIR="$TREE" SPARTAN_DATA_DIR="$DATA" SPARTAN_HOME="$GHOME"
     export SPARTAN_CONFIG="$CONFIG" SPARTAN_USER_DIR="$DATA/user" SPARTAN_LOG_DIR="$DATA/logs"

@@ -32,7 +32,7 @@
     "info": { "patches": "entry.sh info patches" }
   },
   "requires": { "python": "3.13" },
-  "storage": { "home": "home/gport", "data": "gdata" },
-  "logs": ["gdata/logs/launch.log", "gdata/user/last_run.log"],
+  "storage": { "home": "home/gport" },
+  "logs": ["home/gport/logs/launch.log", "home/gport/user/last_run.log"],
   "assets": { "cover": "assets/cover.png" }
 }
