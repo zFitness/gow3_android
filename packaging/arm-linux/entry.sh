@@ -37,6 +37,10 @@ py_exec() {
 
 launch_env() {
     mkdir -p "$DATA/user" "$DATA/logs" "$OUT" "$GHOME"
+    # config 项（config_cli 同一契约）：video_backend / pad_shim / readback_linear
+    _cfg() { [ -f "$CONFIG" ] && sed -n "s/^$1=//p" "$CONFIG" | tail -1; }
+    _cfg_bool() { v=$(_cfg "$1") || true; [ "$v" != "0" ] && [ "$v" != "false" ]; }
+    _cfg_backend=$(_cfg video_backend) || _cfg_backend="";
     # 旧 gdata 布局一次性并入 HOME（存档/配置优先，不覆盖新数据）
     if [ -d "$PKG/gdata" ] && [ ! -e "$DATA/.gdata-migrated" ]; then
         cp -R "$PKG/gdata/user/." "$DATA/user/" 2>/dev/null || true
@@ -50,7 +54,10 @@ launch_env() {
     export SPARTAN_GAME_DIR="$GAME_DIR"
     # guest glibc：桌面同款 hwcaps 关闭（FEXCore 下不受支持指令）
     export GLIBC_TUNABLES='glibc.cpu.hwcaps=-AVX2,-AVX,-AVX_Fast_Unaligned_Load,-AVX2_Usable,-AVX_Usable'
-    export SDL_VIDEODRIVER=x11 DISPLAY=:0
+    export SDL_VIDEODRIVER=x11 DISPLAY="${DISPLAY:-:0}"
+    case "${_cfg_backend:-auto}" in
+        x11|wayland) export SDL_VIDEODRIVER="$_cfg_backend" ;;
+    esac
     export MESA_VK_WSI_DEBUG=sw MESA_VK_WSI_PRESENT_MODE=relaxed
     export FEXDROID_PRESENT="${FEXDROID_PRESENT:-$HOST/tmp/fxpresent.sock}"
     export SDL_JOYSTICK_HIDAPI=0
@@ -67,8 +74,13 @@ launch_env() {
     export TK_LIBRARY="$HOST/usr/share/tcltk/tk8.6"
     # fexpad 虚拟手柄：顶层启动 shell 可能是 bionic（/system/bin/sh，fexdroid 对其不注入
     # preload），glibc 子树由这里自己补上——probe 进程内 fexpad 等到 SDL3 后注入虚拟手柄
-    if [ -f "$HOST/usr/lib/fexdroid/libfexpad.so" ]; then
+    # （config 的 pad_shim=0 关闭；关闭后游戏读不到手柄）
+    if _cfg_bool pad_shim && [ -f "$HOST/usr/lib/fexdroid/libfexpad.so" ]; then
         export LD_PRELOAD="$HOST/usr/lib/fexdroid/libfexpad.so"
+    fi
+    # config 的 readback_linear（launch_env.py 消费，缺省开）
+    if ! _cfg_bool readback_linear; then
+        export SPARTAN_READBACK_LINEAR=0
     fi
 }
 

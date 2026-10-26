@@ -12,46 +12,20 @@ import sys
 
 SCHEMA = {
   "groups": [
-    {"id": "cheats", "title": "作弊码", "advanced": False, "items": [
-      {"key": "cheat_health", "title": "无限生命", "type": "boolean", "default": False},
-      {"key": "cheat_magic", "title": "无限魔法", "type": "boolean", "default": False},
-      {"key": "cheat_item", "title": "无限物品", "type": "boolean", "default": False},
-      {"key": "cheat_rage", "title": "无限怒气", "type": "boolean", "default": False},
-      {"key": "cheat_orbs", "title": "无限红魂", "type": "boolean", "default": False},
-      {"key": "cheat_very_hard", "title": "解锁混沌难度", "type": "boolean", "default": False},
-      {"key": "cheat_double_jumps", "title": "二段跳", "type": "boolean", "default": False},
-      {"key": "auto_qte", "title": "QTE 自动", "type": "boolean", "default": False},
-      {"key": "enemy_health_bar", "title": "敌人血条", "type": "boolean", "default": True}]},
-    {"id": "video", "title": "画面", "items": [
-      {"key": "render_resolution", "title": "渲染分辨率", "type": "enum",
-       "enum": ["native", "480p", "720p", "900p", "1440p", "1800p", "4K"],
-       "default": "native", "restart": True},
-      {"key": "engine_fps", "title": "目标帧率", "type": "enum",
-       "enum": ["60", "100", "120", "144", "180", "240"],
-       "default": "120", "restart": True},
-      {"key": "upscaler", "title": "超分辨率", "type": "enum",
-       "enum": ["off", "fsr3", "fsr4", "fsr411", "taa", "dlss"],
-       "default": "off", "restart": True},
-      {"key": "sharpness", "title": "锐化", "type": "number", "min": 0, "max": 2, "step": 0.05, "default": 0.8},
-      {"key": "anisotropy", "title": "各向异性过滤", "type": "enum",
-       "enum": ["0", "2", "4", "8", "16"], "default": "0", "restart": True},
-      {"key": "vsync", "title": "垂直同步", "type": "boolean", "default": False, "restart": True},
-      {"key": "fps_limit", "title": "帧率上限", "type": "enum",
-       "enum": ["0", "30", "60", "100", "120", "144", "180", "240"],
-       "default": "0", "note": "0 = 不限制"}]},
-    {"id": "overlay", "title": "性能悬浮窗", "advanced": True, "items": [
-      {"key": "show_fps", "title": "显示帧率", "type": "boolean", "default": False},
-      {"key": "overlay_fps", "title": "帧率/帧时间曲线", "type": "boolean", "default": False},
-      {"key": "overlay_cpu", "title": "CPU 占用", "type": "boolean", "default": False},
-      {"key": "overlay_opacity", "title": "不透明度", "type": "number", "min": 0, "max": 100, "step": 5, "default": 80}]},
-    {"id": "advanced", "title": "高级", "advanced": True, "items": [
-      {"key": "deferred_readback", "title": "延迟回读", "type": "boolean", "default": True},
-      {"key": "stale_readback", "title": "容忍过期回读", "type": "boolean", "default": False},
-      {"key": "frames_queued", "title": "GPU 排队帧数", "type": "number", "min": 0, "max": 8, "step": 1, "default": 0,
-       "note": "0 = 不限制"},
-      {"key": "debug_view", "title": "调试视图", "type": "boolean", "default": False},
-      {"key": "vibration", "title": "震动反馈", "type": "boolean", "default": True}]}
-  ]}
+    {"id": "game", "title": "游戏", "items": [
+      {"key": "game_dir", "title": "游戏目录", "type": "file", "mode": "directory",
+       "note": "eboot.bin 所在目录（CUSA01740）；清空用内置缺省路径"}]},
+    {"id": "display", "title": "画面", "items": [
+      {"key": "video_backend", "title": "视频后端", "type": "enum",
+       "enum": ["auto", "x11", "wayland"],
+       "labels": ["自动", "X11 (Termux:X11)", "Wayland"],
+       "default": "auto", "restart": True, "note": "SDL 视频驱动；更改后需重新进入游戏"},
+      {"key": "readback_linear", "title": "回读线性化", "type": "boolean", "default": True,
+       "restart": True, "advanced": True, "note": "GPU 读回纹理线性过滤；个别画面异常时可尝试关闭"}]},
+    {"id": "input", "title": "输入", "items": [
+      {"key": "pad_shim", "title": "虚拟手柄桥", "type": "boolean", "default": True,
+       "restart": True, "note": "fexpad：触屏虚拟手柄与外接手柄注入；关闭后游戏读不到手柄"}]}]
+}
 
 
 def index(schema):
@@ -84,9 +58,10 @@ def write_ini(path, vals):
     for line in open(path, encoding="utf-8", errors="replace").read().splitlines():
         s = line.strip()
         key = s.split("=", 1)[0].strip() if "=" in s and not s.startswith(("#", ";")) else None
-        if key is not None and key in known:          # schema 内键重写
-            lines.append(f"{key}={vals[key]}")
-            seen.add(key)
+        if key is not None and key in known:          # schema 内键重写；不在 vals（null 重置）= 删行
+            if key in vals:
+                lines.append(f"{key}={vals[key]}")
+                seen.add(key)
         else:                                          # 未知键原样保留（launcher 资产）
             lines.append(line)
     for k, v in vals.items():
@@ -101,6 +76,16 @@ def write_ini(path, vals):
 def die(msg):
     print(json.dumps({"error": msg}))
     raise SystemExit(1)
+
+
+def typed(it, raw):
+    """The ini string as the schema's JSON type (get 的出口；coerce 的逆运算）。"""
+    if it["type"] == "boolean":
+        return str(raw).strip().lower() in ("1", "true", "yes", "on")
+    if it["type"] == "number":
+        v = float(raw)
+        return int(v) if v.is_integer() else v
+    return raw
 
 
 def coerce(it, raw):
@@ -146,7 +131,7 @@ def main():
             for k, it in known.items():
                 if k in ini_vals:
                     try:
-                        out[k] = coerce(it, ini_vals[k])
+                        out[k] = typed(it, ini_vals[k])   # 真 JSON 类型（boolean/number）
                     except Exception:
                         out[k] = it.get("default")
                 elif "default" in it:
@@ -159,9 +144,12 @@ def main():
             for k, v in payload.items():
                 if k not in known:
                     die(f"key not in schema: {k}")
-                ini_vals[k] = coerce(known[k], v)
+                if v is None:                  # null = 重置（删行，get 回落到 schema 缺省）
+                    ini_vals.pop(k, None)
+                else:
+                    ini_vals[k] = coerce(known[k], v)
             write_ini(ini, ini_vals)
-            print(json.dumps({"ok": True, "written": {k: ini_vals[k] for k in payload}}))
+            print(json.dumps({"ok": True, "written": {k: ini_vals.get(k) for k in payload}}))
         else:
             die("usage: config schema|get|set")
     elif ns == "info":
