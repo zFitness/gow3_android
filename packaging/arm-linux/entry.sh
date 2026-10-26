@@ -115,9 +115,12 @@ check|vulkan)
     ;;
 config)
     sub="${1:-}"; [ $# -gt 0 ] && shift || true
+    [ -d "$DATA/logs" ] || mkdir -p "$DATA/logs"
     [ -d "$DATA" ] || mkdir -p "$DATA"
     [ -f "$CONFIG" ] || : > "$CONFIG"
-    py_exec "$TREE/entry_main.py" config "$sub" "$CONFIG" "$@"
+    # 排障痕迹：App 侧 PortVerbs 丢弃 stderr，127 类失败只有这里能取证（stdout 照常给 App）
+    { echo "=== config $(date) sub=$sub uid=$(id -u)"; echo "HOST=$HOST"; echo "PATH=$PATH"; [ -x "$LOADER" ] && echo "LOADER exec: yes" || echo "LOADER exec: NO"; [ -x "$HOST/usr/bin/python3.13" ] && echo "rootfs py: yes" || echo "rootfs py: NO"; command -v python3.13 >/dev/null 2>&1 && echo "PATH py3.13: yes" || echo "PATH py3.13: NO"; } >> "$DATA/logs/config.log" 2>&1 || true
+    py_exec "$TREE/entry_main.py" config "$sub" "$CONFIG" "$@" 2>> "$DATA/logs/config.log" || { code=$?; echo "config: py_exec exit $code" >> "$DATA/logs/config.log"; exit $code; }
     ;;
 info)
     sub="${1:-}"; [ $# -gt 0 ] && shift || true
