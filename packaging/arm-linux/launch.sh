@@ -1,3 +1,4 @@
+#!/bin/sh
 # 一键入口（fexdroid 尚未支持 runtime.json 适配期的过渡形态）。
 # fexdroid Runner 自定义程序：程序 = <rootfs>/bin/sh，参数 = imports/spartanport/launch.sh
 PKG=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

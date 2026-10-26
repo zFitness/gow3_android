@@ -1,3 +1,4 @@
+#!/bin/sh
 # fexdroid Runtime 包唯一契约面（verb 协议，见 my-docs/Runtime打包规范.md §5）。
 # stdout 必须是纯 JSON 的是 config/info verb；run 的输出进会话日志（诊断走 stderr）。
 #
