@@ -131,6 +131,27 @@ def encode(line):
     raise ValueError(f'unsupported patch type {kind!r}')
 
 
+
+def resolution_names(xmls):
+    """Sizes ("3440x1440") of the "Resolution Patch - <size>" entries of these patch files, smallest first."""
+    found = []
+    for path in xmls:
+        try:
+            root = ET.parse(path).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        for meta in root.iter('Metadata'):
+            name = meta.get('Name') or ''
+            if name.startswith(EXCLUSIVE_PREFIX) and name[len(EXCLUSIVE_PREFIX):].startswith(' - '):
+                size = name[len(EXCLUSIVE_PREFIX) + 3:].strip()
+                if size and size not in found:
+                    found.append(size)
+    def pixels(size):
+        width, _, height = size.partition('x')
+        return (int(width) * int(height), size) if width.isdigit() and height.isdigit() else (1 << 60, size)
+    return sorted(found, key=pixels)
+
+
 def compile_patches(xml, names, app_version, segments, image=None, skipped=None):
     """Writes of the named patches. With the game's image, each site is found by its signature
     (any build); without it, at the reference build's Address. A Line with a Target writes at that

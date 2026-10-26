@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Windows counterpart of run.sh: prepares the game image and starts gow3-probe.exe.
+"""Prepares the game image and starts spartanport-probe (Windows and Linux; run.sh wraps it on Linux).
 
-Same environment variables as run.sh (SPARTAN_GAME_DIR, SPARTAN_DATA_DIR, SPARTAN_PATCHES, SPARTAN_MODS_*,
-SPARTAN_USER_DIR, ...). Extra arguments go to gow3-probe.
+Environment variables (SPARTAN_GAME_DIR, SPARTAN_DATA_DIR, SPARTAN_PATCHES, SPARTAN_MODS_*,
+SPARTAN_USER_DIR, ...). Extra arguments go to spartanport-probe.
 The in-game "Apply and restart" runs this script again through SPARTAN_RESTART_COMMAND;
 `--after PID` waits for the previous game process to end first (its GPU device and memory).
 """
-import ctypes
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
+import time
 
 WINDOWS = sys.platform == 'win32'
 EXE_SUFFIX = '.exe' if WINDOWS else ''
+if WINDOWS:
+    import ctypes
 
 PORT = Path(__file__).resolve().parent
 
@@ -26,6 +29,17 @@ def fail(message):
 
 
 def wait_for(pid):
+    if not WINDOWS:
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            except PermissionError:
+                pass
+            time.sleep(0.1)
+        return
     kernel32 = ctypes.windll.kernel32
     SYNCHRONIZE = 0x00100000
     handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
@@ -41,22 +55,55 @@ def no_console():
     return 0 if ctypes.windll.kernel32.GetConsoleWindow() else subprocess.CREATE_NO_WINDOW
 
 
-def run_script(name, *args, capture=False):
+def parse_cpu_features(output):
+    """Instruction sets `spartanport-probe --cpu-features` reports missing ([] when complete)."""
+    for line in output.splitlines():
+        if line.startswith('CPU: missing '):
+            return [name.strip() for name in line[len('CPU: missing '):].split(',') if name.strip()]
+    return []
+
+
+def isa_rewrite_wanted(missing, env):
+    """SPARTAN_ISA_REWRITE=1 forces the ISA rewrite table, 0 disables it; otherwise the CPU decides."""
+    policy = env.get('SPARTAN_ISA_REWRITE')
+    if policy in ('0', '1'):
+        return policy == '1'
+    return bool(missing)
+
+
+def run_script(name, *args, capture=False, check=True):
     # Inside the packaged launcher executable (PyInstaller) the executable runs scripts itself.
     script = ['--script'] if getattr(sys, 'frozen', False) else []
     command = [sys.executable, *script, str(PORT / 'scripts' / name), *map(str, args)]
+    env = {**os.environ, 'PYTHONIOENCODING': 'utf-8'}
     if capture:
         result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, text=True,
-                                creationflags=no_console())
+                                encoding='utf-8', env=env, creationflags=no_console())
+        if not check:
+            return result.returncode, result.stdout
         if result.returncode:
             sys.exit(result.returncode)
         return result.stdout
     # stdin given: the output handles are passed explicitly (a windowed launcher child would
     # get none otherwise).
-    result = subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console())
+    result = subprocess.run(command, stdin=subprocess.DEVNULL, env=env, creationflags=no_console())
     if result.returncode:
         sys.exit(result.returncode)
     return None
+
+
+def launch_prefix(env):
+    """Linux integrations chosen in the launcher: MangoHud is its Vulkan layer (an environment
+    variable), GameMode a command that starts the game."""
+    if WINDOWS:
+        return []
+    if env.get('SPARTAN_MANGOHUD') == '1':
+        env.setdefault('MANGOHUD', '1')
+    if env.get('SPARTAN_GAMEMODE') == '1':
+        if gamemode := shutil.which('gamemoderun'):
+            return [gamemode]
+        print('GameMode: gamemoderun not found, starting without it', flush=True)
+    return []
 
 
 def find_executable(name):
@@ -67,6 +114,51 @@ def find_executable(name):
     return None
 
 
+def glyph_mounts(env, probe, game, out):
+    """(probe arguments, style) of the controller glyphs: patched copies of the WADs that hold the
+    game's button icons, mounted over them (scripts/glyphs.py). Opt-in: unless SPARTAN_GLYPH_STYLE is
+    auto, xbox, nintendo or keyboard nothing is asked, drawn or mounted, and old copies are removed.
+    The keyboard keys follow SPARTAN_KEY_MAP; auto shows them when no gamepad is connected. The game
+    folder is never written."""
+    choice = env.get('SPARTAN_GLYPH_STYLE', 'off')
+    if choice not in ('auto', 'xbox', 'nintendo', 'keyboard'):
+        shutil.rmtree(Path(out) / 'glyphs', ignore_errors=True)
+        return [], None
+    try:
+        import glyphs
+        pad = ''
+        if choice == 'auto':
+            pad = subprocess.run([str(probe), '--gamepad'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                 text=True, timeout=15, creationflags=no_console()).stdout
+        style, faces, name = glyphs.resolve(choice, pad)
+        mounts = glyphs.build(game, out, style, faces, env.get('SPARTAN_PAD_MAP', ''), env.get('SPARTAN_KEY_MAP', ''))
+    except Exception as error:  # noqa: BLE001  (icons only: whatever fails, the game still starts)
+        print(f'Glyphs: {error}; the game keeps its own button icons', flush=True)
+        return [], None
+    if not mounts:
+        print('Glyphs: a PlayStation controller, the game keeps its own button icons' if style == 'playstation'
+              else 'Glyphs: no button icons found in this game folder', flush=True)
+        return [], None
+    print(f'Glyphs: {style}{f" ({name})" if name else ""}, on copies in {Path(out) / "glyphs"}; game files untouched',
+          flush=True)
+    return [part for guest, path in mounts.items() for part in ('--mount', f'{guest}={path}')], style
+
+
+def pause_menu_args(game, out, mounts, language=None):
+    """Probe arguments for the copy of R_UI.WAD with the pause menu's Exit to Desktop row
+    (scripts/pause_menu.py), made from the glyphs' copy when `mounts` has one. The probe mounts it
+    over both once its hook is in (src/menu_hook.h). The game folder is never written."""
+    import pause_menu
+    guest = '/app0/' + pause_menu.WAD
+    source = next((part.split('=', 1)[1] for part in mounts if part.startswith(guest + '=')), None)
+    try:
+        made = pause_menu.build(game, out, source, language=language)
+    except OSError as error:
+        print(f'Pause menu: {error}; no Exit to Desktop row', flush=True)
+        return []
+    return [part for path in made.values() for part in ('--pause-menu', str(path))]
+
+
 def main():
     args = sys.argv[1:]
     if len(args) >= 2 and args[0] == '--after':
@@ -75,7 +167,11 @@ def main():
     # As run.sh: relative paths (SPARTAN_GAME_DIR, SPARTAN_DATA_DIR, fsr4_shaders/) are from the port.
     os.chdir(PORT)
     env = os.environ
+    sys.path.insert(0, str(PORT / 'scripts'))
+    import legacy
+    legacy.forward_environment(env)
     data = Path(env.get('SPARTAN_DATA_DIR', PORT))
+    legacy.copy_game_settings(data)
     out = data / 'out'
     out.mkdir(parents=True, exist_ok=True)
     env.setdefault('SPARTAN_CONFIG', str(data / 'spartanport.ini'))
@@ -83,25 +179,59 @@ def main():
     # derived again from the new options.
     for key in env.pop('SPARTAN_DERIVED', '').split(','):
         env.pop(key, None)
-    sys.path.insert(0, str(PORT / 'scripts'))
+    derived = []
+    import graphics_options
+    try:
+        import discord_presence
+    except Exception:
+        discord_presence = None
+    import mods
+    import patches
+    # The enabled mods' patch files: their "Resolution Patch - <size>" entries are render resolutions too
+    # (the launcher and the in-game menu list them; SPARTAN_EXTRA_RESOLUTIONS tells the game).
+    mod_patch_files = mods.enabled_patch_files(env.get('SPARTAN_MODS_DIR', data / 'mods'),
+                                               env.get('SPARTAN_MODS_CONFIG', data / 'mods.json'),
+                                               env.get('SPARTAN_MODS_ENABLED', '1') != '0',
+                                               env.get('SPARTAN_GAME_DIR', PORT.parent / 'CUSA01623'))
+    extra_resolutions = [s for s in patches.resolution_names(mod_patch_files) if s not in graphics_options.RESOLUTIONS]
+    env['SPARTAN_EXTRA_RESOLUTIONS'] = ';'.join(extra_resolutions)
+    derived.append('SPARTAN_EXTRA_RESOLUTIONS')
+    graphics, reverted = graphics_options.prepare(env['SPARTAN_CONFIG'], out / 'graphics_state.json', extra_resolutions)
+    if reverted:
+        print('Graphics: the last restart never reached the game; previous options restored', flush=True)
+    env.update(graphics_options.environment(graphics))
     if not env.get('SPARTAN_FSR411_DIR') and not (PORT / 'fsr4_411').is_dir() and (data / 'fsr4_411').is_dir():
         env['SPARTAN_FSR411_DIR'] = str(data / 'fsr4_411')
 
-    # 2.6.0 的 gow3→spartanport 改名漏掉了这里（Windows 玩家也会拿到 'gow3-probe.exe not
-    # found'）；packaged 构建 ship 的是 run.py 旁的 bin/spartanport-probe。
-    probe = Path(env['SPARTAN_PROBE']) if env.get('SPARTAN_PROBE') \
-        else find_executable('spartanport-probe' + EXE_SUFFIX)
+    probe = Path(env['SPARTAN_PROBE']) if env.get('SPARTAN_PROBE') else find_executable('spartanport-probe' + EXE_SUFFIX)
     if not probe or not probe.is_file():
-        fail('spartanport-probe not found: build it with build.sh, or use a packaged build.')
+        fail(f'spartanport-probe{EXE_SUFFIX} not found: build it with build.sh or use a packaged build.')
     # Development builds run from the MSYS2 tree: its CLANG64 DLLs (SDL3, FFmpeg, ...).
-    if not (probe.parent / 'SDL3.dll').is_file():
+    if WINDOWS and not (probe.parent / 'SDL3.dll').is_file():
         clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
         if clang64.is_dir():
             env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
+    # Instruction sets this CPU lacks (MOVBE, BMI1, LZCNT): the ISA rewrite covers them; exit 20
+    # is a set nothing covers.
+    features = subprocess.run([str(probe), '--cpu-features'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                              text=True, creationflags=no_console())
+    if features.returncode == 20:
+        print(features.stdout, end='', flush=True)
+        sys.exit(20)
+    missing = parse_cpu_features(features.stdout)
 
     game = Path(env.get('SPARTAN_GAME_DIR', PORT.parent / 'CUSA01623'))
     if not (game / 'eboot.bin').is_file():
         fail(f'No eboot.bin in {game} (set SPARTAN_GAME_DIR).')
+    update_view = None
+    if env.get('SPARTAN_PATCH_DIR'):
+        import game_update
+        try:
+            update_view = game_update.create_view(game, env['SPARTAN_PATCH_DIR'], out)
+        except (ValueError, OSError) as error:
+            fail(str(error))
+        game = update_view
+        print(f'Game and update combined from {env["SPARTAN_PATCH_DIR"]}', flush=True)
     original_game = game.resolve()
     game = Path(run_script('mods.py', game, '--out', out,
                            '--mods-dir', env.get('SPARTAN_MODS_DIR', data / 'mods'),
@@ -112,24 +242,89 @@ def main():
         run_script('prepare.py', game, '--out', out)
         run_script('link_libc.py', game, '--out', out)
         run_script('link_modules.py', game, '--out', out)
+        # A failed rewrite prints its reason and the game starts without the table.
+        isa_args = []
+        if isa_rewrite_wanted(missing, env):
+            code, output = run_script('isa_rewrite.py', out / 'boot-linked.bin', '--out', out,
+                                      capture=True, check=False)
+            print(output, end='', flush=True)
+            if code == 0:
+                isa_args = ['--isa-rewrite', str(out / 'isa-rewrite.bin')]
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('SPARTAN_CONTENT_SKU', 'full'))
 
-        import launch_env
-        # Graphics options, patch selection and DMEM/VBlank: one source, shared with run.sh.
-        env.setdefault('SPARTAN_PATCHES_DIR', str(data / 'patches'))
-        env.setdefault('SPARTAN_PATCHES_CONFIG', str(data / 'patches.json'))
-        plan = launch_env.derive(game, env['SPARTAN_CONFIG'], out / 'graphics_state.json', env, out=out)
-        if plan['reverted']:
-            print('Graphics: the last restart never reached the game; previous options restored', flush=True)
-        env.update(plan['updates'])
-        # The window shows the game's icon (BMP: the format SDL loads without extra libraries).
+        from patches import game_profile_for, patch_requirements, patch_status, selected_patches
+        profile = game_profile_for(game)
+        engine_fps = 60
+        # The window shows the port's own icon (BMP: the format SDL loads without extra libraries); on
+        # Linux also an application id the desktop entry matches, so the shell shows the same icon.
+        icon_file = PORT / 'launcher' / 'spartanport.png'
+        if not WINDOWS:
+            env.setdefault('SDL_APP_ID', 'spartanport')
         try:
             from PIL import Image
-            with Image.open(game / 'sce_sys' / 'icon0.png') as icon:
+            with Image.open(icon_file) as icon:
                 icon.convert('RGBA').resize((64, 64), Image.LANCZOS).save(out / 'window_icon.bmp')
             env.setdefault('SPARTAN_WINDOW_ICON', str(out / 'window_icon.bmp'))
         except (ImportError, OSError):
             pass
+        # The temporal upscalers and motion vectors are not calibrated for this game yet: they stay
+        # off unless the launcher's experimental switch is on (then spartanport.ini decides); linear
+        # image readbacks fix its corrupted textures.
+        if env.get('SPARTAN_EXPERIMENTAL_UPSCALER') != '1':
+            env.setdefault('SPARTAN_UPSCALER', 'none')
+        env.setdefault('SPARTAN_READBACK_LINEAR', '1')
+        patch_xml = profile[1] if profile else None
+        if profile and mod_patch_files:
+            # The built-in patches plus the enabled mods' (the same file for the selection and the notes).
+            patch_xml = patches.merge_patch_files(profile[1], mod_patch_files, out / 'patches-merged.xml')
+        if profile:
+            names = selected_patches(patch_xml, profile[2], env.get('SPARTAN_PATCHES', ''), env.get('SPARTAN_PATCHES_ONLY') == '1')
+            # A mod's patches that are on by default (isEnabled) stay on when the launcher chose the list.
+            names += [n for n in patches.default_enabled(mod_patch_files, profile[2]) if n not in names]
+            # spartanport.ini decides the resolution and frame rate patches (in-game menu, launcher).
+            names = graphics_options.patch_names(names, graphics)
+            names = graphics_options.restrict_to_available(names, patches.available_patches(patch_xml, profile[2]))
+            env['SPARTAN_PATCHES'] = ';'.join(names)
+            env['SPARTAN_PATCHES_ONLY'] = '1'
+        (out / 'patch_status.json').unlink(missing_ok=True)
+        run_script('patches.py', '--out', out, '--extra', env.get('SPARTAN_PATCHES', ''), '--game-dir', game,
+                   '--patches-dir', env.get('SPARTAN_PATCHES_DIR', data / 'patches'),
+                   '--patches-config', env.get('SPARTAN_PATCHES_CONFIG', data / 'patches.json'),
+                   *[arg for f in mod_patch_files for arg in ('--mod-patches', f)])
+        if profile:
+            # Only the patches found in this eboot.bin count: a frame rate patch that was skipped
+            # leaves the engine at 60 FPS, and the notes' memory and VBlank needs follow the same list.
+            applied = (patch_status(out) or {}).get('applied', [])
+            engine_fps = graphics_options.applied_engine_fps(applied)
+            dmem, vblank = patch_requirements(patch_xml, applied, profile[2])
+            for key, value in (('SPARTAN_DMEM_MB', dmem), ('SPARTAN_VBLANK_HZ', vblank)):
+                if value and key not in env:
+                    env[key] = str(value)
+                    derived.append(key)
+        if 'SPARTAN_VBLANK_HZ' not in env:
+            env['SPARTAN_VBLANK_HZ'] = '60'
+            derived.append('SPARTAN_VBLANK_HZ')
+        # The highest engine rate this launch allows (the menu picks a lower one live). Without the
+        # frame rate patch the engine steps 1/60 s per frame: the present thread must not flip
+        # faster (spartanport_graphics.h PresentLimit), or the game speeds up.
+        env['SPARTAN_ENGINE_FPS'] = str(engine_fps)
+        derived.append('SPARTAN_ENGINE_FPS')
+        print(f'Engine frame rate: {min(int(graphics["engine_fps"]), engine_fps)} FPS, live up to {engine_fps}'
+              + ('' if engine_fps > 60 or graphics['engine_fps'] == '60' else
+                 ' (the frame rate patch was not found in this eboot.bin)'), flush=True)
+        glyph_args, glyph_style = glyph_mounts(env, probe, game, out)
+        if glyph_style:  # the in-game menu names the buttons the same way
+            env['SPARTAN_GLYPHS'] = glyph_style
+            derived.append('SPARTAN_GLYPHS')
+        mount_args = glyph_args + pause_menu_args(game, out, glyph_args, env.get('SPARTAN_LANGUAGE'))
+        env['SPARTAN_DERIVED'] = ','.join(derived)
+        # The guest memory pool is committed in full at start: a resolution patch above 1080p
+        # can need more than 16 GB of RAM, and the game then closes when the page file cannot grow.
+        import guest_memory
+        if warning := guest_memory.memory_warning(env.get('SPARTAN_DMEM_MB'), guest_memory.physical_memory_mb(),
+                                                  env.get('SPARTAN_STREAM_MEMORY', 'cached')):
+            print(warning, flush=True)
+
         # The in-game restart starts this script again once this process is gone.
         # GPU caches (shaders, pipelines) beside the saves; read before main(), so set here.
         user_dir = Path(env.get('SPARTAN_USER_DIR', data / 'user')).resolve()
@@ -142,17 +337,32 @@ def main():
         except OSError as error:
             print(f'Save backup failed, starting anyway: {error}', flush=True)
         this = ['--run'] if getattr(sys, 'frozen', False) else [str(Path(__file__).resolve())]
-        restart = [sys.executable, *this, '--after', str(os.getpid()), *args]
-        env['SPARTAN_RESTART_COMMAND'] = subprocess.list2cmdline(restart)
-        command = [str(probe), str(out / 'boot-linked.bin'), '--content-profile', str(out / 'content.bin'),
+        # Windows: the probe starts the new launch and ends, so it waits for this process. Linux:
+        # the probe replaces itself with the new launch while this process still waits for it.
+        after = ['--after', str(os.getpid())] if WINDOWS else []
+        restart = [sys.executable, *this, *after, *args]
+        env['SPARTAN_RESTART_COMMAND'] = subprocess.list2cmdline(restart) if WINDOWS else shlex.join(restart)
+        command = [*launch_prefix(env), str(probe), str(out / 'boot-linked.bin'), '--content-profile', str(out / 'content.bin'),
                    '--patches', str(out / 'patches.bin'), '--app0', str(game),
                    '--user', str(user_dir),
-                   '--timeout', env.get('SPARTAN_TIMEOUT', '0'), *args]
+                   '--timeout', env.get('SPARTAN_TIMEOUT', '0'), *isa_args, *mount_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
-        return subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console()).returncode
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
+        presence = None
+        try:
+            try:
+                presence = discord_presence.Presence(pid=process.pid) if discord_presence else None
+            except (OSError, RuntimeError):
+                print('Discord presence unavailable; the game will continue', flush=True)
+            return process.wait()
+        finally:
+            if presence:
+                presence.close()
     finally:
         if mod_view:
             shutil.rmtree(mod_view, ignore_errors=True)
+        if update_view:
+            game_update.remove_view(update_view)
 
 
 if __name__ == '__main__':
