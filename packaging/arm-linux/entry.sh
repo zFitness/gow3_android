@@ -47,6 +47,7 @@ launch_env() {
     [ -f "$CONFIG" ] || : > "$CONFIG"
     export SPARTAN_PORT_DIR="$TREE" SPARTAN_DATA_DIR="$DATA" SPARTAN_HOME="$GHOME"
     export SPARTAN_CONFIG="$CONFIG" SPARTAN_USER_DIR="$DATA/user" SPARTAN_LOG_DIR="$DATA/logs"
+    export SPARTAN_GAME_DIR="$GAME_DIR"
     # guest glibc：桌面同款 hwcaps 关闭（FEXCore 下不受支持指令）
     export GLIBC_TUNABLES='glibc.cpu.hwcaps=-AVX2,-AVX,-AVX_Fast_Unaligned_Load,-AVX2_Usable,-AVX_Usable'
     export SDL_VIDEODRIVER=x11 DISPLAY=:0
