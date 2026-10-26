@@ -152,6 +152,45 @@ def resolution_names(xmls):
     return sorted(found, key=pixels)
 
 
+
+def merge_patch_files(base, extras, out):
+    """Writes `out`: the patches of `base` plus those of the mods' patch files (`extras`, in load order).
+    A patch with a name that is already there is replaced; a file for other titles or one that does not
+    parse is left out with a note. Returns `out`."""
+    tree = ET.parse(base)
+    root = tree.getroot()
+    ids = {e.text.strip() for e in root.iter('ID') if e.text}
+    for path in extras:
+        try:
+            extra = ET.parse(path).getroot()
+        except (OSError, ET.ParseError) as error:
+            print(f'Patches: {Path(path).name}: {error}', file=sys.stderr)
+            continue
+        extra_ids = {e.text.strip() for e in extra.iter('ID') if e.text}
+        if extra_ids and not extra_ids & ids:
+            continue
+        for meta in extra.iter('Metadata'):
+            name = meta.get('Name')
+            for old in [m for m in root.iter('Metadata') if m.get('Name') == name]:
+                root.remove(old)
+            root.append(meta)
+    with open(out, 'wb') as f:
+        f.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+
+
+def default_enabled(xmls, app_version):
+    """Names of the patches of these files that are on by default (isEnabled), for this app version."""
+    names = []
+    for path in xmls:
+        try:
+            root = ET.parse(path).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        names += [m.get('Name') for m in root.iter('Metadata')
+                  if m.get('AppVer') == app_version and m.get('isEnabled', 'false').lower() == 'true']
+    return names
+
+
 def compile_patches(xml, names, app_version, segments, image=None, skipped=None):
     """Writes of the named patches. With the game's image, each site is found by its signature
     (any build); without it, at the reference build's Address. A Line with a Target writes at that
