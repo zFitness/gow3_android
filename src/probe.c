@@ -706,6 +706,10 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "--user") && i+1<argc) user_dir=argv[++i];
         else if (!strcmp(argv[i], "--patches") && i+1<argc) patch_file=argv[++i];
         else if (!strcmp(argv[i], "--timeout") && i+1<argc) timeout_seconds=(unsigned)strtoul(argv[++i],NULL,10);
+        /* gport: 上游 launcher 会传 --pause-menu <模式>（游戏内暂停菜单的 Exit-to-Desktop）。
+         * 该功能随 FEX loader 重写裁掉了（触摸覆盖层 UI 替代）——此处接受并忽略，
+         * 不让 launcher 的合法参数导致启动失败。 */
+        else if (!strcmp(argv[i], "--pause-menu") && i+1<argc) { ++i; }
         else { fprintf(stderr, "Unknown option: %s\n", argv[i]); return 1; }
     }
     if (argc < 2) {
