@@ -16,6 +16,6 @@ COPYFILE_DISABLE=1 tar --exclude='._*' -C "$STAGE" -cf - . | "${ADB[@]}" exec-in
   "mkdir -p 'files/imports/$NAME/gdata' 'files/imports/$NAME/home/$NAME' && cd 'files/imports/$NAME' && rm -rf gport runtime.json assets launch.sh game && tar -xf -"
 
 echo ">> 完成。fexdroid Runner 自定义程序："
-echo "   程序 = <rootfs>/bin/sh   参数 = imports/$NAME/launch.sh     （一键进游戏，零参数）
-   参数 = imports/$NAME/launcher.sh   （PC 配置器：补丁/作弊/图形）"
+echo "   程序 = <rootfs>/bin/sh   参数 = imports/$NAME/gport/entry.sh game      （一键进游戏）
+   参数 = imports/$NAME/gport/entry.sh launcher （PC 配置器）"
 echo "   （首跑诊断：files/imports/$NAME/gdata/logs/；entry.sh 的 Vulkan preflight 失败 exit 4）"

@@ -20,8 +20,8 @@ _ini_dir=""; [ -f "$CONFIG" ] && _ini_dir=$(sed -n 's/^game_dir=//p' "$CONFIG" |
 GAME_DIR="${SPARTAN_GAME_DIR:-${_ini_dir:-/storage/emulated/0/games/ps4/GOW3 ROM/CUSA01740}}"
 HOST="${FXD_ROOT:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}"
 PY=python3.13; command -v "$PY" >/dev/null 2>&1 || PY=python3
-BIN="$TREE/arm64/bin"
-LIB="$TREE/arm64/lib"
+BIN="$TREE/bin"
+LIB="$TREE/lib"
 PROBE="$BIN/spartanport-probe"
 # python 统一走显式 loader（烤入的解释器路径在跨 app/无会话场景不可靠；旧链同款模式）。
 # run-as/无会话下 PATH 里没有 rootfs bin，必须用 rootfs 绝对路径 + 补 libpython 查找路径。
