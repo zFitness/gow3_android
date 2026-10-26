@@ -11,7 +11,8 @@ ADB=(adb); [[ -n ${ANDROID_SERIAL:-} ]] && ADB+=(-s "$ANDROID_SERIAL")
 [[ -f $STAGE/port.json ]] || { echo "no package: $STAGE (run packaging/arm-linux/build.sh)" >&2; exit 1; }
 
 echo ">> run-as 直装：files/imports/$NAME"
-tar -C "$STAGE" -cf - . | "${ADB[@]}" exec-in run-as "$PKG" sh -c \
+# macOS 的 tar 会把 APFS 扩展属性打成 ._ AppleDouble 文件——Android 上是垃圾
+COPYFILE_DISABLE=1 tar --exclude='._*' -C "$STAGE" -cf - . | "${ADB[@]}" exec-in run-as "$PKG" sh -c \\
   "mkdir -p 'files/imports/$NAME/gdata' 'files/imports/$NAME/home/$NAME' && cd 'files/imports/$NAME' && rm -rf gport runtime.json assets launch.sh game && tar -xf -"
 
 echo ">> 完成。fexdroid Runner 自定义程序："

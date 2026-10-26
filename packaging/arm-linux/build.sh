@@ -163,11 +163,10 @@ end_stage "$(ls "$out/lib" | wc -l | tr -d ' ') libs"
 begin "package (nixport port)"
 stage=$out/pkg/$program
 rm -rf "$out/pkg"
-mkdir -p "$stage/arm64/bin/gpu" "$stage/arm64/lib" "$stage/config"
-install -m755 "$out/bin/spartanport-probe" "$stage/arm64/bin/"
-install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$stage/arm64/bin/gpu/"
-cp -R "$out/lib/." "$stage/arm64/lib/"
-ln -sfn arm64/bin "$stage/bin"   # 兼容按 bin/spartanport-probe 查找的消费方（launcher）
+mkdir -p "$stage/bin/gpu" "$stage/lib" "$stage/config"
+install -m755 "$out/bin/spartanport-probe" "$stage/bin/"
+install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$stage/bin/gpu/"
+cp -R "$out/lib/." "$stage/lib/"
 install -m755 packaging/arm-linux/entry.sh "$stage/entry.sh"
 install -m644 packaging/arm-linux/entry_main.py "$stage/entry_main.py"
 install -m644 run.py "$stage/"
@@ -187,7 +186,7 @@ mkdir -p "$stage/../assets"
 
 # 验收：manifest / 布局 / shebang / 黑名单（驱动与游戏数据不得入包）
 [[ $(python3 -c "import json;print(json.load(open('$stage/../port.json'))['schema'])") == nixport.port.v1 ]] || die 'port.json schema wrong'
-for f in "$stage/entry.sh" "$stage/arm64/bin/spartanport-probe" "$stage/arm64/bin/gpu/libgportgpu.so" "$stage/arm64/bin/gpu/libgportcpu.so" "$stage/run.py"; do
+for f in "$stage/entry.sh" "$stage/bin/spartanport-probe" "$stage/bin/gpu/libgportgpu.so" "$stage/bin/gpu/libgportcpu.so" "$stage/run.py"; do
     [[ -e $f ]] || die "package incomplete: $f"
 done
 while IFS= read -r -d '' shf; do
@@ -206,7 +205,8 @@ mkdir -p "$SPARTAN_DATA_DIR" "$SPARTAN_HOME"
 echo "    verb smoke OK"
 
 mkdir -p "$dist"
-( cd "$out/pkg" && tar czf "$dist/spartanport-port.tar.gz" port.json launch.sh launcher.sh assets "$program" )
+# macOS tar 会把 APFS 扩展属性打成 ._ 文件——Port 包必须干净
+COPYFILE_DISABLE=1 tar --exclude='._*' -czf "$dist/spartanport-port.tar.gz" -C "$out/pkg" port.json launch.sh launcher.sh assets "$program"
 end_stage "$dist/spartanport-port.tar.gz ($(du -m "$dist/spartanport-port.tar.gz" | cut -f1) MB)"
 
 printf '\nPort package ready: %s\n' "$dist/spartanport-port.tar.gz"
