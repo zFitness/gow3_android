@@ -47,6 +47,7 @@ launch_env() {
     # rootfs 的 lib 也挂上：供 fexpad 预载库解析 libc 等
     export LD_LIBRARY_PATH="$TREE/lib:$HOST/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     export PATH="$TREE/bin:$PATH"
+    export HOME="${HOME:-$GHOME}"   # Tk/配置文件落在 guest home
     # fexpad 虚拟手柄：顶层启动 shell 可能是 bionic（/system/bin/sh，fexdroid 对其不注入
     # preload），glibc 子树由这里自己补上——probe 进程内 fexpad 等到 SDL3 后注入虚拟手柄
     if [ -f "$HOST/usr/lib/fexdroid/libfexpad.so" ]; then

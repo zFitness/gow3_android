@@ -179,6 +179,7 @@ for name in gport-fex-compatible.json gport-gamecontrollerdb.txt gport-packages.
     [[ -f packaging/arm-linux/config/$name ]] && install -m644 "packaging/arm-linux/config/$name" "$stage/config/"
 done
 install -m755 packaging/arm-linux/launch.sh "$stage/../launch.sh"
+install -m755 packaging/arm-linux/launcher.sh "$stage/../launcher.sh"
 install -m644 packaging/arm-linux/runtime.json "$stage/../runtime.json"
 mkdir -p "$stage/../assets"
 [[ -f packaging/arm-linux/assets/cover.png ]] && install -m644 packaging/arm-linux/assets/cover.png "$stage/../assets/cover.png"
