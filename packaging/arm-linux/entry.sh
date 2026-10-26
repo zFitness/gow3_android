@@ -48,6 +48,9 @@ launch_env() {
     export LD_LIBRARY_PATH="$TREE/lib:$HOST/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     export PATH="$TREE/bin:$PATH"
     export HOME="${HOME:-$GHOME}"   # Tk/配置文件落在 guest home
+    # Tcl/Tk 数据文件：_tkinter 用编译期默认路径找 init.tcl（guest 视角未映射），显式指到 rootfs
+    export TCL_LIBRARY="$HOST/usr/share/tcltk/tcl8.6"
+    export TK_LIBRARY="$HOST/usr/share/tcltk/tk8.6"
     # fexpad 虚拟手柄：顶层启动 shell 可能是 bionic（/system/bin/sh，fexdroid 对其不注入
     # preload），glibc 子树由这里自己补上——probe 进程内 fexpad 等到 SDL3 后注入虚拟手柄
     if [ -f "$HOST/usr/lib/fexdroid/libfexpad.so" ]; then
