@@ -73,7 +73,7 @@ REPLAY = {
 # 排除清单：不迁入（驱动归 fexdroid、APK/deploy/CI 血统、音频、LSFG、run-gport 链）
 SKIP = {
     'src/runtime_audio.c',  # 音频：走系统 PulseAudio，保持上游（永久 UPSTREAM）
-    'tests/test_pad.c',     # 与 tag 版 runtime_pad.c 配对（pad 文件桥退役，2026-10-25）
+    'tests/test_pad.c',     # 已删除（pad 文件桥退役，SDL 直识别；runtime_pad.c 为 tag 版）
     'tests/test_patches.py',  # 安卓变体 + compose 退役守卫（launch_env 需 checked_output）
     'gpu/shim/gport_pad_input.h',   # pad 文件桥退役（SDL 直识别），不迁
     'tests/test_pad_input.cpp',     # 同上
