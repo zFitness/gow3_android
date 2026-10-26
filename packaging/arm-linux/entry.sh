@@ -82,6 +82,14 @@ launch_env() {
     if ! _cfg_bool readback_linear; then
         export SPARTAN_READBACK_LINEAR=0
     fi
+    # config 的补丁选择（patches_enabled + "patch: 名字" 键）→ run.py 的 SPARTAN_PATCHES/ONLY。
+    # 关闭（缺省）= 补丁文件的 isEnabled 缺省；开启 = 只应用勾选项（分辨率补丁顶替纹理修复、
+    # AlwaysOn 保留等互斥语义由 run.py 的 selected_patches 处理）。
+    if _cfg_bool patches_enabled && [ -f "$CONFIG" ]; then
+        _sel=$(sed -n 's/^patch: \(.*\)=1$/\1/p' "$CONFIG" | tr '\n' ';')
+        _sel=${_sel%;}
+        [ -n "$_sel" ] && export SPARTAN_PATCHES="$_sel" SPARTAN_PATCHES_ONLY=1
+    fi
 }
 
 verb="${1:-}"; [ $# -gt 0 ] && shift || true

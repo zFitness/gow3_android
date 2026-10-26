@@ -2,20 +2,35 @@
 """entry_main.py — entry.sh 的 config/info verb 实现（fexdroid 契约的 JSON 出口）。
 
 用法：
-  entry_main.py config schema
+  entry_main.py config schema                       <ini>
   entry_main.py config get                          <ini>
   entry_main.py config set <payload-json>           <ini>
   entry_main.py info patches                        <patch_status.json>
+
+schema 是动态的：game_dir 设了且能读出游戏身份（TITLE_ID/APP_VER）并找到
+补丁 XML，才追加"补丁"组（每个可用补丁一个布尔项）——这就是与游戏目录的
+联动：没设目录时该组不存在，设了之后 App 端重拉 schema 即出现。
+分辨率/帧率等 ini 键由上游 run.py 直接从 SPARTAN_CONFIG 指向的本文件读，
+无需 entry.sh 转接。
 """
 import json
 import sys
+from copy import deepcopy
+from pathlib import Path
 
-SCHEMA = {
-  "groups": [
+TREE = Path(__file__).resolve().parent
+if str(TREE / 'scripts') not in sys.path:
+    sys.path.insert(0, str(TREE / 'scripts'))
+
+STATIC_GROUPS = [
     {"id": "game", "title": "游戏", "items": [
       {"key": "game_dir", "title": "游戏目录", "type": "file", "mode": "directory",
-       "note": "eboot.bin 所在目录（CUSA01740）；清空用内置缺省路径"}]},
+       "note": "eboot.bin 所在目录（CUSA01740）；设置后此处会出现补丁选择"}]},
     {"id": "display", "title": "画面", "items": [
+      {"key": "render_resolution", "title": "渲染分辨率", "type": "enum",
+       "enum": ["native", "480p", "720p", "900p", "1440p", "1800p", "4K"],
+       "labels": ["原始 (1080p)", "480p", "720p", "900p", "1440p", "1800p", "4K"],
+       "default": "native", "restart": True},
       {"key": "video_backend", "title": "视频后端", "type": "enum",
        "enum": ["auto", "x11", "wayland"],
        "labels": ["自动", "X11 (Termux:X11)", "Wayland"],
@@ -24,8 +39,47 @@ SCHEMA = {
        "restart": True, "advanced": True, "note": "GPU 读回纹理线性过滤；个别画面异常时可尝试关闭"}]},
     {"id": "input", "title": "输入", "items": [
       {"key": "pad_shim", "title": "虚拟手柄桥", "type": "boolean", "default": True,
-       "restart": True, "note": "fexpad：触屏虚拟手柄与外接手柄注入；关闭后游戏读不到手柄"}]}]
-}
+       "restart": True, "note": "fexpad：触屏虚拟手柄与外接手柄注入；关闭后游戏读不到手柄"}]},
+]
+
+
+def patch_group(vals):
+    """补丁组（联动 game_dir）：身份 + 补丁 XML 任一不可得就返回 None。"""
+    game = vals.get('game_dir')
+    if not game:
+        return None
+    try:
+        from patches import available_patches, game_sfo
+        sfo = game_sfo(game)
+        title, version = sfo.get('TITLE_ID'), sfo.get('APP_VER')
+        if not title or not version:
+            return None
+        xmls = sorted(TREE.parent.glob(f'patches/*{title}.xml'))
+        if not xmls:
+            return None
+        names = sorted(available_patches(str(xmls[0]), version))
+        items = [{"key": "patches_enabled", "title": "自定义补丁选择", "type": "boolean",
+                  "default": False, "restart": True,
+                  "note": "开启后只应用下面勾选的补丁；关闭则用补丁文件的缺省选择"}]
+        for n in names:
+            item = {"key": f"patch: {n}", "title": n, "type": "boolean", "default": False}
+            if n.startswith('Resolution Patch'):
+                item["note"] = "分辨率补丁与纹理修复互斥，应用时自动替换"
+            items.append(item)
+        return {"id": "patches", "title": "补丁", "items": items}
+    except Exception:
+        return None
+
+
+def build_schema(vals):
+    groups = deepcopy(STATIC_GROUPS)
+    patches = patch_group(vals)
+    if patches:
+        groups.append(patches)
+    return {"groups": groups}
+
+
+SCHEMA = {"groups": STATIC_GROUPS}   # 无 ini 上下文时的静态兜底（info 等路径不依赖它）
 
 
 def index(schema):
@@ -119,13 +173,14 @@ def main():
     if ns == "config":
         sub = argv.pop(0) if argv else ""
         ini = argv.pop(0) if argv else ""
-        known = index(SCHEMA)
-        if sub == "schema":
-            print(json.dumps(SCHEMA))
-            return
         if not ini:
-            die("config get/set 需要 ini 路径")
+            die("config schema/get/set 需要 ini 路径")
         ini_vals = read_ini(ini)
+        schema = build_schema(ini_vals)          # 动态：补丁组跟随 game_dir
+        known = index(schema)
+        if sub == "schema":
+            print(json.dumps(schema))
+            return
         if sub == "get":
             out = {}
             for k, it in known.items():
