@@ -74,7 +74,7 @@ launch_env() {
 verb="${1:-}"; [ $# -gt 0 ] && shift || true
 
 case "$verb" in
-game|run)
+game|game-direct|run)
     launch_env
     # 链路自记录：准备/启动的一切诊断落盘（闪退时无需 app 会话内抓取）
     exec >> "$DATA/logs/launch.log" 2>&1
