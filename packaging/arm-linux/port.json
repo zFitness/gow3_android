@@ -9,19 +9,44 @@
   "program": "gport",
   "description": "God of War III Remastered 的 PC 移植启动器平台：内含补丁、作弊码、图形选项、奖杯",
   "entries": [
-    { "id": "launcher", "name": "SpartanPort 启动器", "kind": "launcher",
-      "command": "entry.sh launcher",
-      "desc": "完整启动器：补丁、作弊码、图形、帧率（需 rootfs tkinter）" },
-    { "id": "game", "name": "一键进游戏", "kind": "direct", "display": "x11",
-      "command": "entry.sh game",
-      "desc": "跳过启动器，按当前配置直接运行" },
-    { "id": "game-direct", "name": "一键进游戏（直通帧）", "kind": "direct", "display": "direct",
-      "command": "entry.sh game-direct", "advanced": true,
-      "desc": "直通帧显示路径（与 x11 二选一对比测试）" },
-    { "id": "check", "name": "导入自检", "kind": "direct", "advanced": true,
-      "command": "entry.sh check" },
-    { "id": "vulkan", "name": "Vulkan 自检", "kind": "direct", "advanced": true,
-      "command": "entry.sh vulkan" }
+    {
+      "id": "launcher",
+      "name": "SpartanPort 启动器",
+      "kind": "launcher",
+      "command": "./entry.sh launcher",
+      "desc": "完整启动器：补丁、作弊码、图形、帧率（需 rootfs tkinter）"
+    },
+    {
+      "id": "game",
+      "name": "一键进游戏",
+      "kind": "direct",
+      "display": "x11",
+      "command": "./entry.sh game",
+      "desc": "跳过启动器，按当前配置直接运行"
+    },
+    {
+      "id": "game-direct",
+      "name": "一键进游戏（直通帧）",
+      "kind": "direct",
+      "display": "direct",
+      "command": "./entry.sh game-direct",
+      "advanced": true,
+      "desc": "直通帧显示路径（与 x11 二选一对比测试）"
+    },
+    {
+      "id": "check",
+      "name": "导入自检",
+      "kind": "direct",
+      "advanced": true,
+      "command": "./entry.sh check"
+    },
+    {
+      "id": "vulkan",
+      "name": "Vulkan 自检",
+      "kind": "direct",
+      "advanced": true,
+      "command": "./entry.sh vulkan"
+    }
   ],
   "capabilities": {
     "config": {
@@ -29,10 +54,21 @@
       "get": "entry.sh config get",
       "set": "entry.sh config set"
     },
-    "info": { "patches": "entry.sh info patches" }
+    "info": {
+      "patches": "entry.sh info patches"
+    }
   },
-  "requires": { "python": "3.13" },
-  "storage": { "home": "home/gport" },
-  "logs": ["home/gport/logs/launch.log", "home/gport/user/last_run.log"],
-  "assets": { "cover": "assets/cover.png" }
+  "requires": {
+    "python": "3.13"
+  },
+  "storage": {
+    "home": "home/gport"
+  },
+  "logs": [
+    "home/gport/logs/launch.log",
+    "home/gport/user/last_run.log"
+  ],
+  "assets": {
+    "cover": "assets/cover.png"
+  }
 }
