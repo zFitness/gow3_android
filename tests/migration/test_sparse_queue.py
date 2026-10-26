@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 INSTANCE_H = ROOT / "gpu/shadps4/video_core/renderer_vulkan/vk_instance.h"
 INSTANCE_CPP = ROOT / "gpu/shadps4/video_core/renderer_vulkan/vk_instance.cpp"
 BUFFER_CACHE = ROOT / "gpu/shadps4/video_core/buffer_cache/buffer_cache.cpp"

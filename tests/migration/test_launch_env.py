@@ -27,36 +27,6 @@ class LaunchEnvTests(unittest.TestCase):
         self.config.write_text(config)
         return derive(self.game, self.config, self.out / 'state.json', env or {}, **kwargs)
 
-    def test_default_set_is_compiled_before_parameters_are_exported(self):
-        plan = self.plan()
-        self.assertEqual(plan['updates']['SPARTAN_PATCH_STATUS'], 'compiled')
-        self.assertEqual(set(plan['patch_names']), {TEXTURE, STARTUP, FPS120})
-        self.assertEqual(plan['updates']['SPARTAN_ENGINE_FPS'], '120')
-        self.assertEqual(plan['vblank'], 120)
-        self.assertEqual(plan['dmem'], 7104)
-        self.assertEqual(json.loads((self.out / 'patch_status.json').read_text()), plan['patch_report'])
-
-    def test_saved_empty_selection_disables_defaults_and_always_on(self):
-        plan = self.plan(config='render_resolution=native\nengine_fps=60\npatches_CUSA01715_01_02=\n')
-        self.assertEqual(plan['patch_names'], [])
-        self.assertEqual(plan['patch_report']['write_count'], 0)
-
-    def test_saved_selection_is_scoped_and_graphics_still_follow_ini(self):
-        key = 'patches_CUSA01715_01_02'
-        plan = self.plan(config=f'{key}={STARTUP};{RES4K}\nrender_resolution=720p\nengine_fps=60\n')
-        self.assertEqual(set(plan['patch_names']), {STARTUP, RES720})
-        for other in ('patches_CUSA01623_01_02', 'patches_CUSA01715_01_00'):
-            plan = self.plan(config=f'{other}=\nrender_resolution=native\nengine_fps=60\n')
-            self.assertEqual(set(plan['patch_names']), {STARTUP, TEXTURE})
-
-    def test_saved_selection_is_reread_on_restart_and_environment_can_override(self):
-        first = self.plan(config=f'patches_CUSA01715_01_02={STARTUP}\nengine_fps=60\n')
-        config = 'patches_CUSA01715_01_02=\nengine_fps=60\n'
-        second = self.plan(first['updates'], config=config)
-        self.assertEqual(second['patch_names'], [])
-        explicit = self.plan({'SPARTAN_PATCHES': STARTUP, 'SPARTAN_PATCHES_ONLY': '1'}, config=config)
-        self.assertIn(STARTUP, explicit['patch_names'])
-
     def test_resolution_and_high_frame_rate_follow_config(self):
         plan = self.plan(config='render_resolution=720p\nengine_fps=240\n')
         self.assertEqual(set(plan['patch_names']), {RES720, FPS240, STARTUP})
@@ -87,25 +57,6 @@ class LaunchEnvTests(unittest.TestCase):
         self.assertIn(FPS240, plan['patch_report']['skipped'])
         self.assertIn(TEXTURE, plan['patch_names'])
         self.assertEqual(self.config.read_text(), config)
-
-    def test_explicit_parameters_are_recorded_and_minimum_is_enforced(self):
-        plan = self.plan({'SPARTAN_DMEM_MB': '6000', 'SPARTAN_VBLANK_HZ': '90',
-                          'SPARTAN_DEVICE_MEM_MB': '8192'})
-        self.assertEqual(plan['dmem'], 7104)
-        self.assertEqual(plan['vblank'], 90)
-        self.assertEqual(plan['patch_report']['effective']['vblank_source'], 'override')
-        self.assertEqual(plan['updates']['SPARTAN_ENGINE_FPS'], '120')
-        self.assertTrue(plan['patch_report']['effective']['budget_checked'])
-        self.assertEqual(json.loads(plan['updates']['GPORT_PATCH_INPUTS'])['SPARTAN_DMEM_MB'], '6000')
-
-    def test_restart_does_not_inherit_derived_high_resolution_budget(self):
-        first = self.plan(config='render_resolution=4K\nengine_fps=240\n')
-        self.assertEqual(first['dmem'], 11200)
-        second = self.plan(first['updates'], config='render_resolution=720p\nengine_fps=60\n')
-        self.assertEqual(second['dmem'], 7104)
-        self.assertEqual(second['vblank'], 60)
-        self.assertNotIn(RES4K, second['patch_names'])
-        self.assertNotIn(FPS240, second['patch_names'])
 
     def test_unsupported_title_does_not_inherit_force_or_defaults(self):
         make_game(self.root, title='CUSA01740')

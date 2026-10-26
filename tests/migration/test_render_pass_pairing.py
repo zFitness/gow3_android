@@ -1,6 +1,6 @@
 """执行生产实现 vk_render_pass_pairing.h 的宿主行为回归；不使用源码字符串替代行为断言。
 
-编译并运行 tests/test_render_pass_pairing.cpp（与 Scheduler 共用同一配对护栏实现），
+编译并运行 tests/migration/test_render_pass_pairing.cpp（与 Scheduler 共用同一配对护栏实现），
 验证跨代错位结束被拦截、跨批次合法配对、direct/deferred 往返、重复结束、续接不清屏
 与并发交错。不依赖 Vulkan。
 """
@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class RenderPassPairingTest(unittest.TestCase):
@@ -21,7 +21,7 @@ class RenderPassPairingTest(unittest.TestCase):
             command = shlex.split(os.environ.get("CXX", "c++")) + [
                 "-std=c++23", "-pthread", "-Wall", "-Wextra", "-Werror",
                 "-I", str(ROOT / "gpu/shadps4"),
-                str(ROOT / "tests/test_render_pass_pairing.cpp"), "-o", str(binary),
+                str(ROOT / "tests/migration/test_render_pass_pairing.cpp"), "-o", str(binary),
             ]
             subprocess.run(command, check=True, capture_output=True, text=True, timeout=120)
             result = subprocess.run([str(binary)], check=True, capture_output=True,

@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 TEXTURE_CACHE_H = ROOT / "gpu/shadps4/video_core/texture_cache/texture_cache.h"
 TEXTURE_CACHE_CPP = ROOT / "gpu/shadps4/video_core/texture_cache/texture_cache.cpp"
 GPU_SHIM = ROOT / "gpu/shim/spartanportgpu.cpp"

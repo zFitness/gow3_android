@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 FRAME_CAPTURE = ROOT / "gpu/shadps4/video_core/renderer_vulkan/vk_frame_capture.cpp"
 RASTERIZER = ROOT / "gpu/shadps4/video_core/renderer_vulkan/vk_rasterizer.cpp"
 GPU_SHIM = ROOT / "gpu/shim/spartanportgpu.cpp"

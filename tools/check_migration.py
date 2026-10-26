@@ -73,6 +73,8 @@ REPLAY = {
 # 排除清单：不迁入（驱动归 fexdroid、APK/deploy/CI 血统、音频、LSFG、run-gport 链）
 SKIP = {
     'src/runtime_audio.c',  # 音频：走系统 PulseAudio，保持上游（永久 UPSTREAM）
+    'tests/test_pad.c',     # 与 tag 版 runtime_pad.c 配对（pad 文件桥退役，2026-10-25）
+    'tests/test_patches.py',  # 安卓变体 + compose 退役守卫（launch_env 需 checked_output）
     'gpu/shim/gport_pad_input.h',   # pad 文件桥退役（SDL 直识别），不迁
     'tests/test_pad_input.cpp',     # 同上
     'tests/test_android_1740_patches.py',   # 上游 HEAD 自身的破损测试（引用已删目录），一并去除
@@ -80,6 +82,9 @@ SKIP = {
     'tests/test_android_runtime_archive.py',
     'tests/test_android_runtime_elf.py',
     'tests/test_android_turnip_selection.py',
+    'tests/test_patch_launchers.py',            # 旧 run-gport 补丁选择链（已退役）
+    'tests/test_turnip_renderpass_guard.py',    # 0008 mesa 补丁归 fexdroid patches/mesa/dormant
+    'tests/test_launcher_settings_contract.py', # 旧 APK 设置契约（fexdroid 侧不适用）
     'build.sh',             # 保持上游（PC 路径原样）；ARM64 交叉构建由 tools/android/build_arm64.sh
                             # 承载——参考仓 build.sh 的增量是旧安卓流程残留（GOW3_PGO/gow3gpu 旧
                             # 命名与已对齐的 gpu/CMakeLists.txt 不匹配，且删除 x86 宿主 ISA 编译）
@@ -148,6 +153,22 @@ PARTIAL = {
 }
 
 
+# 迁移测试已归位 tests/migration/（安卓测试的最终位置）
+MOVED = {
+    'tests/test_launch_env.py': 'tests/migration/test_launch_env.py',
+    'tests/test_backing_write.py': 'tests/migration/test_backing_write.py',
+    'tests/test_frame_capture.py': 'tests/migration/test_frame_capture.py',
+    'tests/test_recording_diagnostics.cpp': 'tests/migration/test_recording_diagnostics.cpp',
+    'tests/test_recording_diagnostics.py': 'tests/migration/test_recording_diagnostics.py',
+    'tests/test_render_pass_pairing.cpp': 'tests/migration/test_render_pass_pairing.cpp',
+    'tests/test_render_pass_pairing.py': 'tests/migration/test_render_pass_pairing.py',
+    'tests/test_scheduler_chunk.py': 'tests/migration/test_scheduler_chunk.py',
+    'tests/test_sparse_queue.py': 'tests/migration/test_sparse_queue.py',
+    'tests/test_texture_diagnostics.py': 'tests/migration/test_texture_diagnostics.py',
+    'tests/test_verify_game_patches.py': 'tests/migration/test_verify_game_patches.py',
+}
+
+
 def norm(t):
     """对比清单 2026-10-22 的归一化规则。"""
     t = re.sub(r'\bspartanport_(?!gpu\b)', 'gow3_', t)
@@ -195,7 +216,7 @@ def main():
     counts = {}
     for rel in walk(ref_root):
         ref = open(os.path.join(ref_root, rel), errors='replace').read()
-        own_path = os.path.join(self_root, rel)
+        own_path = os.path.join(self_root, MOVED.get(rel, rel))
         if is_skip(rel):
             status = 'SKIP'
         elif not os.path.exists(own_path):
