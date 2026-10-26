@@ -15,10 +15,14 @@ GHOME="${SPARTAN_HOME:-$PKG/home/gport}"
 CONFIG="${SPARTAN_CONFIG:-$DATA/spartanport.ini}"
 OUT="$DATA/out"
 # 调试期缺省：共享存储的游戏 dump（fexdroid 注入 manifest env 后此处仅为兜底）
-GAME_DIR="${SPARTAN_GAME_DIR:-/storage/emulated/0/games/ps4/GOW3 ROM/CUSA01740}"
+# 游戏目录优先级：env > ini 的 game_dir 配置项（config file 项，§7）> 烤入缺省
+_ini_dir=""; [ -f "$CONFIG" ] && _ini_dir=$(sed -n 's/^game_dir=//p' "$CONFIG" | tail -1)
+GAME_DIR="${SPARTAN_GAME_DIR:-${_ini_dir:-/storage/emulated/0/games/ps4/GOW3 ROM/CUSA01740}}"
 HOST="${FXD_ROOT:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}"
 PY=python3.13; command -v "$PY" >/dev/null 2>&1 || PY=python3
-PROBE="$TREE/bin/spartanport-probe"
+BIN="$TREE/arm64/bin"
+LIB="$TREE/arm64/lib"
+PROBE="$BIN/spartanport-probe"
 # python 统一走显式 loader（烤入的解释器路径在跨 app/无会话场景不可靠；旧链同款模式）。
 # run-as/无会话下 PATH 里没有 rootfs bin，必须用 rootfs 绝对路径 + 补 libpython 查找路径。
 LOADER="$HOST/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
@@ -46,8 +50,8 @@ launch_env() {
     export PULSE_SERVER="${PULSE_SERVER:-unix:$HOST/tmp/pulse/native}" PULSE_LATENCY_MSEC=60
     # 打包库（rootfs 缺的 SDL3/ffmpeg 等）；bin/gpu 由 probe 的 RUNPATH 自取。
     # rootfs 的 lib 也挂上：供 fexpad 预载库解析 libc 等
-    export LD_LIBRARY_PATH="$TREE/lib:$HOST/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    export PATH="$TREE/bin:$PATH"
+    export LD_LIBRARY_PATH="$LIB:$HOST/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export PATH="$BIN:$PATH"
     export HOME="${HOME:-$GHOME}"   # Tk/配置文件落在 guest home
     # Tcl/Tk 数据文件：_tkinter 用编译期默认路径找 init.tcl（guest 视角未映射），显式指到 rootfs
     export TCL_LIBRARY="$HOST/usr/share/tcltk/tcl8.6"

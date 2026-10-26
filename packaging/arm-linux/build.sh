@@ -159,14 +159,15 @@ bundle "$out/bin/spartanport-probe"
 find "$out/lib" -name '*.so*' -exec "$llvm_bin/llvm-strip" --strip-unneeded {} + 2>/dev/null || true
 end_stage "$(ls "$out/lib" | wc -l | tr -d ' ') libs"
 
-# ---- 5/5 程序树组装 + fexdroid Runtime 包 ---------------------------------------------
-begin "package (fexdroid runtime)"
+# ---- 5/5 程序树组装 + fexdroid Port 包（规范 v1.5） ------------------------------------
+begin "package (nixport port)"
 stage=$out/pkg/$program
 rm -rf "$out/pkg"
-mkdir -p "$stage/bin/gpu" "$stage/lib" "$stage/config"
-install -m755 "$out/bin/spartanport-probe" "$stage/bin/"
-install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$stage/bin/gpu/"
-cp -R "$out/lib/." "$stage/lib/"
+mkdir -p "$stage/arm64/bin/gpu" "$stage/arm64/lib" "$stage/config"
+install -m755 "$out/bin/spartanport-probe" "$stage/arm64/bin/"
+install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$stage/arm64/bin/gpu/"
+cp -R "$out/lib/." "$stage/arm64/lib/"
+ln -sfn arm64/bin "$stage/bin"   # 兼容按 bin/spartanport-probe 查找的消费方（launcher）
 install -m755 packaging/arm-linux/entry.sh "$stage/entry.sh"
 install -m644 packaging/arm-linux/entry_main.py "$stage/entry_main.py"
 install -m644 run.py "$stage/"
@@ -178,17 +179,20 @@ find "$stage/launcher" -name __pycache__ -prune -exec rm -r {} + 2>/dev/null || 
 for name in gport-fex-compatible.json gport-gamecontrollerdb.txt gport-packages.txt; do
     [[ -f packaging/arm-linux/config/$name ]] && install -m644 "packaging/arm-linux/config/$name" "$stage/config/"
 done
+install -m644 packaging/arm-linux/port.json "$stage/../port.json"
 install -m755 packaging/arm-linux/launch.sh "$stage/../launch.sh"
 install -m755 packaging/arm-linux/launcher.sh "$stage/../launcher.sh"
-install -m644 packaging/arm-linux/runtime.json "$stage/../runtime.json"
 mkdir -p "$stage/../assets"
 [[ -f packaging/arm-linux/assets/cover.png ]] && install -m644 packaging/arm-linux/assets/cover.png "$stage/../assets/cover.png"
 
-# 验收：manifest / 布局 / 黑名单（驱动与游戏数据不得入包）
-[[ $(python3 -c "import json;print(json.load(open('$stage/../runtime.json'))['schema'])") == fexdroid.runtime.v1 ]] || die 'runtime.json schema wrong'
-for f in "$stage/entry.sh" "$stage/bin/spartanport-probe" "$stage/bin/gpu/libgportgpu.so" "$stage/bin/gpu/libgportcpu.so" "$stage/run.py"; do
+# 验收：manifest / 布局 / shebang / 黑名单（驱动与游戏数据不得入包）
+[[ $(python3 -c "import json;print(json.load(open('$stage/../port.json'))['schema'])") == nixport.port.v1 ]] || die 'port.json schema wrong'
+for f in "$stage/entry.sh" "$stage/arm64/bin/spartanport-probe" "$stage/arm64/bin/gpu/libgportgpu.so" "$stage/arm64/bin/gpu/libgportcpu.so" "$stage/run.py"; do
     [[ -e $f ]] || die "package incomplete: $f"
 done
+while IFS= read -r -d '' shf; do
+    head -n1 "$shf" | grep -q '/system/bin/sh' && die "host shebang found: $shf"
+done < <(find "$stage" -name '*.sh' -print0)
 for bad in libvulkan_freedreno freedreno_icd liblsfg VkLayer_LS eboot.bin eboot.elf boot.bin; do
     if find "$stage" -name "*$bad*" | grep -q .; then die "forbidden file in package: $bad"; fi
 done
@@ -202,7 +206,7 @@ mkdir -p "$SPARTAN_DATA_DIR" "$SPARTAN_HOME"
 echo "    verb smoke OK"
 
 mkdir -p "$dist"
-( cd "$out/pkg" && tar czf "$dist/spartanport-runtime.tar.gz" runtime.json assets "$program" )
-end_stage "$dist/spartanport-runtime.tar.gz ($(du -m "$dist/spartanport-runtime.tar.gz" | cut -f1) MB)"
+( cd "$out/pkg" && tar czf "$dist/spartanport-port.tar.gz" port.json launch.sh launcher.sh assets "$program" )
+end_stage "$dist/spartanport-port.tar.gz ($(du -m "$dist/spartanport-port.tar.gz" | cut -f1) MB)"
 
-printf '\nRuntime package ready: %s\n' "$dist/spartanport-runtime.tar.gz"
+printf '\nPort package ready: %s\n' "$dist/spartanport-port.tar.gz"

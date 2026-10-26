@@ -8,7 +8,7 @@ PKG=${FXD_PACKAGE:-ro.cobrabm.fexdroid}
 NAME=${1:-spartanport}
 STAGE=out/arm64-linux/pkg
 ADB=(adb); [[ -n ${ANDROID_SERIAL:-} ]] && ADB+=(-s "$ANDROID_SERIAL")
-[[ -f $STAGE/runtime.json ]] || { echo "no package: $STAGE (run packaging/arm-linux/build.sh)" >&2; exit 1; }
+[[ -f $STAGE/port.json ]] || { echo "no package: $STAGE (run packaging/arm-linux/build.sh)" >&2; exit 1; }
 
 echo ">> run-as 直装：files/imports/$NAME"
 tar -C "$STAGE" -cf - . | "${ADB[@]}" exec-in run-as "$PKG" sh -c \
