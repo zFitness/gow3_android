@@ -50,12 +50,12 @@
   ],
   "capabilities": {
     "config": {
-      "schema": "entry.sh config schema",
-      "get": "entry.sh config get",
-      "set": "entry.sh config set"
+      "schema": "./entry.sh config schema",
+      "get": "./entry.sh config get",
+      "set": "./entry.sh config set"
     },
     "info": {
-      "patches": "entry.sh info patches"
+      "patches": "./entry.sh info patches"
     }
   },
   "requires": {
