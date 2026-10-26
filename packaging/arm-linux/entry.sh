@@ -1,4 +1,3 @@
-#!/system/bin/sh
 # fexdroid Runtime 包唯一契约面（verb 协议，见 my-docs/Runtime打包规范.md §5）。
 # stdout 必须是纯 JSON 的是 config/info verb；run 的输出进会话日志（诊断走 stderr）。
 #
@@ -44,9 +43,15 @@ launch_env() {
     [ -f "$TREE/config/gport-gamecontrollerdb.txt" ] &&
         export SDL_GAMECONTROLLERCONFIG_FILE="$TREE/config/gport-gamecontrollerdb.txt"
     export PULSE_SERVER="${PULSE_SERVER:-unix:$HOST/tmp/pulse/native}" PULSE_LATENCY_MSEC=60
-    # 打包库（rootfs 缺的 SDL3/ffmpeg 等）；bin/gpu 由 probe 的 RUNPATH 自取
-    export LD_LIBRARY_PATH="$TREE/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    # 打包库（rootfs 缺的 SDL3/ffmpeg 等）；bin/gpu 由 probe 的 RUNPATH 自取。
+    # rootfs 的 lib 也挂上：供 fexpad 预载库解析 libc 等
+    export LD_LIBRARY_PATH="$TREE/lib:$HOST/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     export PATH="$TREE/bin:$PATH"
+    # fexpad 虚拟手柄：顶层启动 shell 可能是 bionic（/system/bin/sh，fexdroid 对其不注入
+    # preload），glibc 子树由这里自己补上——probe 进程内 fexpad 等到 SDL3 后注入虚拟手柄
+    if [ -f "$HOST/usr/lib/fexdroid/libfexpad.so" ]; then
+        export LD_PRELOAD="$HOST/usr/lib/fexdroid/libfexpad.so"
+    fi
 }
 
 verb="${1:-}"; [ $# -gt 0 ] && shift || true
@@ -54,6 +59,9 @@ verb="${1:-}"; [ $# -gt 0 ] && shift || true
 case "$verb" in
 game|run)
     launch_env
+    # 链路自记录：准备/启动的一切诊断落盘（闪退时无需 app 会话内抓取）
+    exec >> "$DATA/logs/launch.log" 2>&1
+    echo "=== launch $(date) uid=$(id -u) ==="
     [ -n "$GAME_DIR" ] || { echo "Runtime: SPARTAN_GAME_DIR is not set" >&2; exit 2; }
     export SPARTAN_PROBE="$PROBE"
     cd "$TREE"
