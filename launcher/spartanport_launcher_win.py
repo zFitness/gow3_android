@@ -115,12 +115,12 @@ def load_mods():
     sys.modules['mods'] = module
     try:
         spec.loader.exec_module(module)
-    except Exception:
+    except Exception as error:
         if previous is None:
             sys.modules.pop('mods', None)
         else:
             sys.modules['mods'] = previous
-        raise RuntimeError('Could not load scripts/mods.py. Reinstall the complete port update.') from None
+        raise RuntimeError(f'Could not load scripts/mods.py: {error}') from None
     return module
 
 

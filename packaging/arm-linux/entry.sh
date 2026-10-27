@@ -107,11 +107,13 @@ game|game-direct|run)
     ;;
 launcher)
     launch_env
+    { echo "=== launcher $(date) uid=$(id -u) DISPLAY=$DISPLAY"; [ -x "$LOADER" ] && echo "LOADER ok" || echo "LOADER MISSING"; } >> "$DATA/logs/launch.log" 2>&1 || true
     if ! "$PY" -c 'import tkinter' 2>/dev/null; then
         printf '{"error":"tkinter missing: install python3-tk into the rootfs (fexdroid scripts/add-python313-tk.sh)"}\n'
         exit 3
     fi
-    py_exec "$TREE/launcher/spartanport_launcher_win.py"
+    echo "launcher: tkinter ok, starting UI" >> "$DATA/logs/launch.log" 2>&1 || true
+    py_exec "$TREE/launcher/spartanport_launcher_win.py" 2>> "$DATA/logs/launch.log"
     ;;
 check|vulkan)
     launch_env
