@@ -15,40 +15,6 @@
       "kind": "launcher",
       "command": "AppRun launcher",
       "desc": "补丁、作弊码、图形、游戏目录全在这里配置"
-    },
-    {
-      "id": "game",
-      "name": "一键进游戏",
-      "kind": "direct",
-      "command": "AppRun game",
-      "display": "x11",
-      "desc": "按当前配置直接运行（会话显示）"
-    },
-    {
-      "id": "game-direct",
-      "name": "一键进游戏（直通帧）",
-      "kind": "direct",
-      "command": "AppRun game-direct",
-      "display": "direct",
-      "desc": "跳过会话合成，直通帧显示（延迟更低）"
-    },
-    {
-      "id": "check",
-      "name": "导入自检",
-      "kind": "direct",
-      "advanced": true,
-      "command": "AppRun check",
-      "display": "x11",
-      "desc": "链接产物与导入完整性检查"
-    },
-    {
-      "id": "vulkan",
-      "name": "Vulkan 自检",
-      "kind": "direct",
-      "advanced": true,
-      "command": "AppRun vulkan",
-      "display": "x11",
-      "desc": "GPU 驱动与 Vulkan 环境检查"
     }
   ],
   "storage": {

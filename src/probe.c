@@ -679,12 +679,18 @@ void runtime_restart(void) {
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
 #ifndef _WIN32
+    /* gport: pad shim 按需注入（SPARTAN_PAD_LIB）——不再走全局 LD_PRELOAD：链路上的
+     * python/sed/tr 每进程干等 shim 的 SDL3 重试 30 秒（迁移专栏 09 轮次 8）。虚拟手柄
+     * 只属于本进程（游戏的 SDL3 在这里），由我们自己加载。 */
+    const char *pad_lib = getenv("SPARTAN_PAD_LIB");
+    if (pad_lib && !dlopen(pad_lib, RTLD_NOW | RTLD_GLOBAL))
+        fprintf(stderr, "pad shim: %s\n", dlerror());
     /* Keep host heap objects handed to the guest (thread handles, TLS) in the
        non-PIE brk heap, i.e. below 1 TiB: the guest packs pointers into 40 bits. */
     mallopt(M_ARENA_MAX,1);
     mallopt(M_MMAP_THRESHOLD,32*1024*1024);
     /* The guest CPU allocates the memory the guest may hold pointers to through this (below
-     * 1 TiB). No-op on x86-64 hosts (src/gport_runtime_cpu.c). */
+       1 TiB). No-op on x86-64 hosts (src/gport_runtime_cpu.c). */
     gport_guest_cpu_init(runtime_low_map);
 #endif
     if (argc == 2 && !strcmp(argv[1], "--vulkan-only")) return vulkan_smoke();

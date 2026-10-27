@@ -72,11 +72,11 @@ launch_env() {
     # Tcl/Tk 数据文件：_tkinter 用编译期默认路径找 init.tcl（guest 视角未映射），显式指到 rootfs
     export TCL_LIBRARY="$HOST/usr/share/tcltk/tcl8.6"
     export TK_LIBRARY="$HOST/usr/share/tcltk/tk8.6"
-    # fexpad 虚拟手柄：顶层启动 shell 可能是 bionic（/system/bin/sh，fexdroid 对其不注入
-    # preload），glibc 子树由这里自己补上——probe 进程内 fexpad 等到 SDL3 后注入虚拟手柄
-    # （config 的 pad_shim=0 关闭；关闭后游戏读不到手柄）
+    # fexpad 虚拟手柄：只注入 probe（游戏的 SDL3 在 probe 进程），经 SPARTAN_PAD_LIB 由
+    # probe 自加载——全局 LD_PRELOAD 会让链路上的 python/sed/tr 各干等 30 秒 SDL3 重试
+    # （迁移专栏 09 轮次 8），launcher/链路慢到不可用。config 的 pad_shim=0 关闭。
     if _cfg_bool pad_shim && [ -f "$HOST/usr/lib/fexdroid/libfexpad.so" ]; then
-        export LD_PRELOAD="$HOST/usr/lib/fexdroid/libfexpad.so"
+        export SPARTAN_PAD_LIB="$HOST/usr/lib/fexdroid/libfexpad.so"
     fi
     # config 的 readback_linear（launch_env.py 消费，缺省开）
     if ! _cfg_bool readback_linear; then
