@@ -22,6 +22,8 @@ TREE = Path(__file__).resolve().parent
 if str(TREE / 'scripts') not in sys.path:
     sys.path.insert(0, str(TREE / 'scripts'))
 
+# ---- 新 Port 接入模板：改 STATIC_GROUPS（静态项）+ patch_group（动态组等价物）即可，
+# ---- App 侧零改动（表单引擎契约：schema 动态生成 / set 返回完整状态 / 联动只住在这里）。
 STATIC_GROUPS = [
     {"id": "game", "title": "游戏", "items": [
       {"key": "game_dir", "title": "游戏目录", "type": "file", "mode": "directory",
@@ -44,7 +46,8 @@ STATIC_GROUPS = [
 
 
 def patch_group(vals):
-    """补丁组（联动 game_dir）：身份 + 补丁 XML 任一不可得就返回 None。"""
+    """补丁组（联动 game_dir）：身份 + 补丁 XML 任一不可得就返回 None。
+    （新 Port 复制点：把这里换成你自己的动态分组逻辑。）"""
     game = vals.get('game_dir')
     if not game:
         return None
@@ -54,7 +57,7 @@ def patch_group(vals):
         title, version = sfo.get('TITLE_ID'), sfo.get('APP_VER')
         if not title or not version:
             return None
-        xmls = sorted(TREE.parent.glob(f'patches/*{title}.xml'))
+        xmls = sorted(TREE.glob(f'patches/*{title}.xml'))
         if not xmls:
             return None
         names = sorted(available_patches(str(xmls[0]), version))
@@ -142,6 +145,39 @@ def typed(it, raw):
     return raw
 
 
+def current_values(known, ini_vals):
+    """全部配置项的当前值（真 JSON 类型，含 schema 缺省）——get 的出口、set 响应的 values。"""
+    out = {}
+    for k, it in known.items():
+        if k in ini_vals:
+            try:
+                out[k] = typed(it, ini_vals[k])
+            except Exception:
+                out[k] = it.get("default")
+        elif "default" in it:
+            out[k] = it.get("default")
+    return out
+
+
+# 补丁互斥（与 patches.py 的 EXCLUSIVE_PREFIX/REPLACED_BY_EXCLUSIVE 同义，此处独立成表：
+# entry_main 在打包层不 import scripts，保持模板自包含）。
+EXCLUSIVE_PREFIX = 'Resolution Patch'
+REPLACED_BY_EXCLUSIVE = ('Bug Fix - Texture Corruption Fix',)
+
+
+def apply_linkage(ini_vals):
+    """联动副作用——业务规则的唯一住址（App 只渲染返回的状态，不认识任何规则）。
+    勾选任一分辨率补丁时自动关闭被顶替的纹理修复。"""
+    prefix = 'patch: '
+    picks = [k[len(prefix):] for k in ini_vals
+             if k.startswith(prefix) and ini_vals[k] == '1']
+    if any(name.startswith(EXCLUSIVE_PREFIX) for name in picks):
+        for name in REPLACED_BY_EXCLUSIVE:
+            key = prefix + name
+            if ini_vals.get(key) == '1':
+                ini_vals[key] = '0'
+
+
 def coerce(it, raw):
     t = it["type"]
     if t == "boolean":
@@ -182,16 +218,7 @@ def main():
             print(json.dumps(schema))
             return
         if sub == "get":
-            out = {}
-            for k, it in known.items():
-                if k in ini_vals:
-                    try:
-                        out[k] = typed(it, ini_vals[k])   # 真 JSON 类型（boolean/number）
-                    except Exception:
-                        out[k] = it.get("default")
-                elif "default" in it:
-                    out[k] = it.get("default")
-            print(json.dumps(out))
+            print(json.dumps(current_values(known, ini_vals)))
         elif sub == "set":
             payload = json.loads(argv[0]) if argv else {}
             if not isinstance(payload, dict):
@@ -203,8 +230,15 @@ def main():
                     ini_vals.pop(k, None)
                 else:
                     ini_vals[k] = coerce(known[k], v)
+            apply_linkage(ini_vals)            # 联动副作用：业务规则的唯一住址
             write_ini(ini, ini_vals)
-            print(json.dumps({"ok": True, "written": {k: ini_vals.get(k) for k in payload}}))
+            # v1.1：返回应用后的完整状态（values + schema），App 一次往返完成
+            # 提交 + 联动 + 刷新；两者皆缺时 App 降级为保留乐观值（v1.0 兼容）。
+            schema = build_schema(ini_vals)
+            print(json.dumps({"ok": True,
+                              "written": {k: ini_vals.get(k) for k in payload},
+                              "values": current_values(index(schema), ini_vals),
+                              "schema": schema}))
         else:
             die("usage: config schema|get|set")
     elif ns == "info":

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=SpartanPort
+Comment=God of War III Remastered ARM64 port (FEX + shadPS4)
+Exec=AppRun launcher
+Icon=spartanport
+Categories=Game;

@@ -159,39 +159,44 @@ bundle "$out/bin/spartanport-probe"
 find "$out/lib" -name '*.so*' -exec "$llvm_bin/llvm-strip" --strip-unneeded {} + 2>/dev/null || true
 end_stage "$(ls "$out/lib" | wc -l | tr -d ' ') libs"
 
-# ---- 5/5 程序树组装 + fexdroid Port 包（规范 v1.5） ------------------------------------
-begin "package (nixport port)"
-stage=$out/pkg/$program
+# ---- 5/5 AppDir 组装 + Port v2 AppImage（规范：Port打包规范.md，AppImage 分发模型） ------
+begin "package (nixport port v2 appimage)"
+appdir=$out/pkg/$program
 rm -rf "$out/pkg"
-mkdir -p "$stage/bin/gpu" "$stage/lib" "$stage/config"
-install -m755 "$out/bin/spartanport-probe" "$stage/bin/"
-install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$stage/bin/gpu/"
-cp -R "$out/lib/." "$stage/lib/"
-install -m755 packaging/arm-linux/entry.sh "$stage/entry.sh"
-install -m644 packaging/arm-linux/entry_main.py "$stage/entry_main.py"
-install -m644 run.py "$stage/"
-cp -R scripts "$stage/scripts"
-find "$stage/scripts" -name __pycache__ -prune -exec rm -r {} + 2>/dev/null || true
-cp -R patches "$stage/patches"
-cp -R launcher "$stage/launcher"
-find "$stage/launcher" -name __pycache__ -prune -exec rm -r {} + 2>/dev/null || true
+mkdir -p "$appdir/bin/gpu" "$appdir/lib" "$appdir/config"
+install -m755 "$out/bin/spartanport-probe" "$appdir/bin/"
+install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$appdir/bin/gpu/"
+cp -R "$out/lib/." "$appdir/lib/"
+install -m755 packaging/arm-linux/entry.sh "$appdir/entry.sh"
+install -m755 packaging/arm-linux/AppRun "$appdir/AppRun"
+install -m644 packaging/arm-linux/entry_main.py "$appdir/entry_main.py"
+install -m644 run.py "$appdir/"
+cp -R scripts "$appdir/scripts"
+find "$appdir/scripts" -name __pycache__ -prune -exec rm -r {} + 2>/dev/null || true
+cp -R patches "$appdir/patches"
+cp -R launcher "$appdir/launcher"
+find "$appdir/launcher" -name __pycache__ -prune -exec rm -r {} + 2>/dev/null || true
 for name in gport-fex-compatible.json gport-gamecontrollerdb.txt gport-packages.txt; do
-    [[ -f packaging/arm-linux/config/$name ]] && install -m644 "packaging/arm-linux/config/$name" "$stage/config/"
+    [[ -f packaging/arm-linux/config/$name ]] && install -m644 "packaging/arm-linux/config/$name" "$appdir/config/"
 done
-install -m644 packaging/arm-linux/port.json "$stage/../port.json"
-mkdir -p "$stage/../assets"
-[[ -f packaging/arm-linux/assets/cover.png ]] && install -m644 packaging/arm-linux/assets/cover.png "$stage/../assets/cover.png"
+# AppImage 三件套：.DirIcon（取启动器图标）+ .desktop
+cp -f "$appdir/launcher/spartanport.png" "$appdir/.DirIcon"
+install -m644 packaging/arm-linux/spartanport.desktop "$appdir/spartanport.desktop"
+install -m644 packaging/arm-linux/port.json "$out/pkg/port.json"
+mkdir -p "$out/pkg/assets"
+[[ -f packaging/arm-linux/assets/cover.png ]] && install -m644 packaging/arm-linux/assets/cover.png "$out/pkg/assets/cover.png"
 
 # 验收：manifest / 布局 / shebang / 黑名单（驱动与游戏数据不得入包）
-[[ $(python3 -c "import json;print(json.load(open('$stage/../port.json'))['schema'])") == nixport.port.v1 ]] || die 'port.json schema wrong'
-for f in "$stage/entry.sh" "$stage/bin/spartanport-probe" "$stage/bin/gpu/libgportgpu.so" "$stage/bin/gpu/libgportcpu.so" "$stage/run.py"; do
+[[ $(python3 -c "import json;print(json.load(open('$out/pkg/port.json'))['schema'])") == nixport.port.v1 ]] || die 'port.json schema wrong'
+[[ $(python3 -c "import json;print(json.load(open('$out/pkg/port.json'))['appimage'])") == SpartanPort-arm64.AppImage ]] || die 'port.json appimage field wrong'
+for f in "$appdir/entry.sh" "$appdir/AppRun" "$appdir/.DirIcon" "$appdir/bin/spartanport-probe" "$appdir/bin/gpu/libgportgpu.so" "$appdir/bin/gpu/libgportcpu.so" "$appdir/run.py"; do
     [[ -e $f ]] || die "package incomplete: $f"
 done
 while IFS= read -r -d '' shf; do
     head -n1 "$shf" | grep -q '/system/bin/sh' && die "host shebang found: $shf"
-done < <(find "$stage" -name '*.sh' -print0)
+done < <(find "$appdir" -name '*.sh' -print0)
 for bad in libvulkan_freedreno freedreno_icd liblsfg VkLayer_LS eboot.bin eboot.elf boot.bin; do
-    if find "$stage" -name "*$bad*" | grep -q .; then die "forbidden file in package: $bad"; fi
+    if find "$appdir" -name "*$bad*" | grep -q .; then die "forbidden file in package: $bad"; fi
 done
 
 # verb 冒烟（无设备：config/info 走 python，stdout 必须是合法 JSON）
@@ -203,9 +208,20 @@ mkdir -p "$SPARTAN_DATA_DIR" "$SPARTAN_HOME"
   && sh "./$program/entry.sh" info patches | python3 -m json.tool >/dev/null )
 echo "    verb smoke OK"
 
+# AppImage 组装：宿主管线（glibc 天花板 + 排除清单 + mksquashfs + runtime + 魔数）。
+# macOS 无 binutils 的 readelf —— 用 brew llvm 的 llvm-readelf 垫一层。
+fexdroid_tools=$([[ -d $root/../fexdroid ]] && echo "$root/../fexdroid" || echo "")
+[[ -n $fexdroid_tools && -x $fexdroid_tools/scripts/build-port-appimage.sh ]] || die "fexdroid/scripts/build-port-appimage.sh not found (../fexdroid)"
+shim=$out/.readelf-shim; mkdir -p "$shim"
+readelf_src=$(command -v readelf || { for c in "$(brew --prefix llvm 2>/dev/null)/bin/llvm-readelf"; do [[ -x $c ]] && echo "$c" && break; done; })
+[[ -n $readelf_src ]] || die "readelf not found (brew install llvm or binutils)"
+ln -sf "$readelf_src" "$shim/readelf"
 mkdir -p "$dist"
+appimage_out=$out/pkg/SpartanPort-arm64.AppImage
+PATH="$shim:$PATH" bash "$fexdroid_tools/scripts/build-port-appimage.sh" "$appdir" "$appimage_out"
+
 # macOS tar 会把 APFS 扩展属性打成 ._ 文件——Port 包必须干净
-COPYFILE_DISABLE=1 tar --exclude='._*' -czf "$dist/spartanport-port.tar.gz" -C "$out/pkg" port.json assets "$program"
+COPYFILE_DISABLE=1 tar --exclude='._*' -czf "$dist/spartanport-port.tar.gz" -C "$out/pkg" port.json assets SpartanPort-arm64.AppImage
 end_stage "$dist/spartanport-port.tar.gz ($(du -m "$dist/spartanport-port.tar.gz" | cut -f1) MB)"
 
 printf '\nPort package ready: %s\n' "$dist/spartanport-port.tar.gz"

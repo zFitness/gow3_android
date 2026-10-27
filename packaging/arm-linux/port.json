@@ -1,72 +1,61 @@
 {
   "schema": "nixport.port.v1",
   "id": "spartanport",
-  "lang": "zh-CN",
   "name": "SpartanPort",
-  "upstream": "https://github.com/FelipePrado0/SpartanPort",
   "version": "2.7.0",
   "arch": "arm64",
-  "program": "gport",
-  "description": "God of War III Remastered 的 PC 移植启动器平台：内含补丁、作弊码、图形选项、奖杯",
+  "appimage": "SpartanPort-arm64.AppImage",
+  "program": "squashfs-root",
+  "description": "God of War III Remastered：FEX guest CPU + shadPS4 图形栈的 ARM64 移植；补丁、作弊码、图形、游戏目录全部在启动器内配置",
+  "upstream": "https://github.com/FelipePrado0/SpartanPort",
   "entries": [
     {
       "id": "launcher",
       "name": "SpartanPort 启动器",
       "kind": "launcher",
-      "command": "./entry.sh launcher",
-      "desc": "完整启动器：补丁、作弊码、图形、帧率（需 rootfs tkinter）"
+      "command": "AppRun launcher",
+      "desc": "补丁、作弊码、图形、游戏目录全在这里配置"
     },
     {
       "id": "game",
       "name": "一键进游戏",
       "kind": "direct",
+      "command": "AppRun game",
       "display": "x11",
-      "command": "./entry.sh game",
-      "desc": "跳过启动器，按当前配置直接运行"
+      "desc": "按当前配置直接运行（会话显示）"
     },
     {
       "id": "game-direct",
       "name": "一键进游戏（直通帧）",
       "kind": "direct",
+      "command": "AppRun game-direct",
       "display": "direct",
-      "command": "./entry.sh game-direct",
-      "advanced": true,
-      "desc": "直通帧显示路径（与 x11 二选一对比测试）"
+      "desc": "跳过会话合成，直通帧显示（延迟更低）"
     },
     {
       "id": "check",
       "name": "导入自检",
       "kind": "direct",
       "advanced": true,
-      "command": "./entry.sh check"
+      "command": "AppRun check",
+      "display": "x11",
+      "desc": "链接产物与导入完整性检查"
     },
     {
       "id": "vulkan",
       "name": "Vulkan 自检",
       "kind": "direct",
       "advanced": true,
-      "command": "./entry.sh vulkan"
+      "command": "AppRun vulkan",
+      "display": "x11",
+      "desc": "GPU 驱动与 Vulkan 环境检查"
     }
   ],
-  "capabilities": {
-    "config": {
-      "schema": "./entry.sh config schema",
-      "get": "./entry.sh config get",
-      "set": "./entry.sh config set"
-    },
-    "info": {
-      "patches": "./entry.sh info patches"
-    }
-  },
-  "requires": {
-    "python": "3.13"
-  },
   "storage": {
-    "home": "home/gport"
+    "home": "home"
   },
   "logs": [
-    "home/gport/logs/launch.log",
-    "home/gport/user/last_run.log"
+    "home/gport/logs/launch.log"
   ],
   "assets": {
     "cover": "assets/cover.png"

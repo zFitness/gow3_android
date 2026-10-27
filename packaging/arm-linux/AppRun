@@ -1,0 +1,7 @@
+#!/bin/sh
+# SpartanPort AppRun —— AppImage 提取后的唯一入口（宿主: cd squashfs-root && exec ./AppRun <verb>）。
+# APPDIR 自派生：宿主 v2 启动链未注入 APPDIR 时同样可用；一切路径相对本文件。
+# 语义与 v1 的 entry.sh 完全一致：verb = launcher | game | game-direct | check | vulkan | config | info。
+APPDIR="${APPDIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
+export APPDIR
+exec "$APPDIR/entry.sh" "$@"
