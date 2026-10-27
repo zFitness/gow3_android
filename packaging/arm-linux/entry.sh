@@ -17,7 +17,7 @@ CONFIG="${SPARTAN_CONFIG:-$DATA/spartanport.ini}"
 OUT="$DATA/out"
 # 调试期缺省：共享存储的游戏 dump（fexdroid 注入 manifest env 后此处仅为兜底）
 # 游戏目录优先级：env > ini 的 game_dir 配置项（config file 项，§7）> 烤入缺省
-_ini_dir=""; [ -f "$CONFIG" ] && _ini_dir=$(sed -n 's/^game_dir=//p' "$CONFIG" | tail -1)
+_ini_dir=""; [ -f "$CONFIG" ] && { _ini_dir=$(sed -n 's/^game_dir=//p' "$CONFIG" | tail -1) || true; } || true
 GAME_DIR="${SPARTAN_GAME_DIR:-${_ini_dir:-/storage/emulated/0/Download/games/ps4/GOW3 ROM/CUSA01740}}"
 HOST="${FXD_ROOT:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}"
 PY=python3.13; command -v "$PY" >/dev/null 2>&1 || PY=python3
@@ -61,8 +61,9 @@ launch_env() {
     export MESA_VK_WSI_DEBUG=sw MESA_VK_WSI_PRESENT_MODE=relaxed
     export FEXDROID_PRESENT="${FEXDROID_PRESENT:-$HOST/tmp/fxpresent.sock}"
     export SDL_JOYSTICK_HIDAPI=0
-    [ -f "$TREE/config/gport-gamecontrollerdb.txt" ] &&
+    if [ -f "$TREE/config/gport-gamecontrollerdb.txt" ]; then
         export SDL_GAMECONTROLLERCONFIG_FILE="$TREE/config/gport-gamecontrollerdb.txt"
+    fi
     export PULSE_SERVER="${PULSE_SERVER:-unix:$HOST/tmp/pulse/native}" PULSE_LATENCY_MSEC=60
     # 打包库（rootfs 缺的 SDL3/ffmpeg 等）；bin/gpu 由 probe 的 RUNPATH 自取。
     # rootfs 的 lib 也挂上：供 fexpad 预载库解析 libc 等
@@ -83,12 +84,14 @@ launch_env() {
         export SPARTAN_READBACK_LINEAR=0
     fi
     # config 的补丁选择（patches_enabled + "patch: 名字" 键）→ run.py 的 SPARTAN_PATCHES/ONLY。
-    # 关闭（缺省）= 补丁文件的 isEnabled 缺省；开启 = 只应用勾选项（分辨率补丁顶替纹理修复、
-    # AlwaysOn 保留等互斥语义由 run.py 的 selected_patches 处理）。
-    if _cfg_bool patches_enabled && [ -f "$CONFIG" ]; then
+    # 缺省关（与 schema 的 default:false 一致——不能用 _cfg_bool，它把空值当开）。
+    # 开了但没勾任何补丁 = 维持缺省，不导出。if 体收尾不挂 && 链（set -e 会吞掉整个脚本）。
+    if [ "$(_cfg patches_enabled)" = "1" ] && [ -f "$CONFIG" ]; then
         _sel=$(sed -n 's/^patch: \(.*\)=1$/\1/p' "$CONFIG" | tr '\n' ';')
         _sel=${_sel%;}
-        [ -n "$_sel" ] && export SPARTAN_PATCHES="$_sel" SPARTAN_PATCHES_ONLY=1
+        if [ -n "$_sel" ]; then
+            export SPARTAN_PATCHES="$_sel" SPARTAN_PATCHES_ONLY=1
+        fi
     fi
 }
 
