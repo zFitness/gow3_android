@@ -28,12 +28,58 @@ namespace Vulkan {
 
 std::mutex Scheduler::submit_mutex;
 
+namespace {
+
+// spartanport: 录制侧并发诊断的报告条数上限。
+std::atomic<u32> concurrent_recording_reports{0};
+
+/// 线程名（comm）。读不到时返回 "?"。
+std::string ThreadNameById(std::uint32_t tid) {
+    char path[64];
+    std::snprintf(path, sizeof(path), "/proc/self/task/%u/comm", tid);
+    std::string name = "?";
+    if (FILE* file = std::fopen(path, "r")) {
+        char buffer[32]{};
+        if (std::fgets(buffer, sizeof(buffer), file)) {
+            name = buffer;
+            if (!name.empty() && name.back() == '\n') {
+                name.pop_back();
+            }
+        }
+        std::fclose(file);
+    }
+    return name;
+}
+
+} // namespace
+
+std::uint32_t Scheduler::CurrentThreadId() {
+#ifdef _WIN32
+    return static_cast<std::uint32_t>(GetCurrentThreadId());
+#else
+    return static_cast<std::uint32_t>(::gettid());
+#endif
+}
+
+void Scheduler::ReportConcurrentRecording(std::uint32_t holder_tid, const char* entry) {
+    if (concurrent_recording_reports.fetch_add(1, std::memory_order_relaxed) >= 8) {
+        return;
+    }
+    const std::uint32_t self = CurrentThreadId();
+    // 输出表明并发事实仍然存在（本次修复只保证不再崩溃），不得被读作"并发已消除"。
+    std::fprintf(stderr,
+                 "Scheduler: CONCURRENT recording: thread %u (%s) entering %s while thread %u (%s) "
+                 "is in the recording side\n",
+                 self, ThreadNameById(self).c_str(), entry ? entry : "?", holder_tid,
+                 ThreadNameById(holder_tid).c_str());
+}
+
 Scheduler::Scheduler(const Instance& instance, bool threaded_recording)
     : instance{instance}, work_semaphore{instance}, command_pool{instance, &work_semaphore} {
     // spartanport: SPARTAN_VK_RECORD_THREAD=0 records on the calling thread.
     const char* env = std::getenv("SPARTAN_VK_RECORD_THREAD");
     if (threaded_recording && !(env && env[0] == '0')) {
-        record_chunk = AcquireChunk();
+        (void)chunk_holder.Current();
         recorder_thread = std::jthread(std::bind_front(&Scheduler::RecorderThread, this));
         recording_threaded = true;
     }
@@ -285,26 +331,39 @@ void Scheduler::KickRecording(bool force) {
         return;
     }
     const auto producer = ObserveProducer("KickRecording");
+    // spartanport: 录制侧归属观测（诊断开启时报告两个线程同时在此）。
+    const OwnershipScope ownership{*this, "KickRecording"};
     // KickRecording 不更换 command buffer 代：这里收口只会让驱动反复结束/重开渲染范围
     // （Adreno 上等于 GMEM resolve + reload），实测会把 60 FPS 压到 30 FPS。跨代错位由
     // 配对护栏拦截，实际换代只发生在 SubmitExecution（提交前已收口）。
     // Callers kick where nobody holds the raw command buffer: deferral resumes.
     direct_mode = false;
     // Batches of tens of KiB keep the queue handoff cheap relative to the work it carries.
-    if (!force && full_chunks.empty() && record_chunk->Size() < 32 * 1024) {
+    if (!force && full_chunks.empty() && CurrentChunk().Size() < 32 * 1024) {
         return;
     }
-    if (full_chunks.empty() && record_chunk->Empty()) {
+    if (full_chunks.empty() && CurrentChunk().Empty()) {
         return;
     }
+    // spartanport: the chunk that takes the current one's place is taken before the lock
+    // (AcquireChunk locks recorder_mutex itself, so it must not run under it) and swapped in
+    // below: the current chunk is never empty, not even for a moment (the old code moved it
+    // out under the lock and installed the replacement after unlocking, and a recording
+    // thread that entered in between dereferenced a null chunk at address 0x20000).
+    // An empty current chunk needs no replacement: it stays current and is handed over later.
+    std::unique_ptr<RecordChunk> next_chunk = CurrentChunk().Empty() ? nullptr : AcquireChunk();
     bool wake;
     {
         std::scoped_lock lk{recorder_mutex};
         for (auto& chunk : full_chunks) {
             recorder_queue.push_back(std::move(chunk));
         }
-        if (!record_chunk->Empty()) {
-            recorder_queue.push_back(std::move(record_chunk));
+        if (next_chunk) {
+            // 让位的旧 chunk 交回队列（当前 chunk 换上新的，全程非空）。
+            auto handed = chunk_holder.Handover(std::move(next_chunk));
+            if (handed) {
+                recorder_queue.push_back(std::move(handed));
+            }
         }
         wake = recorder_sleeping;
         queued_chunks.store(recorder_queue.size(), std::memory_order_release);
@@ -313,9 +372,6 @@ void Scheduler::KickRecording(bool force) {
     // A busy recorder picks the new chunks up by itself: waking it is a syscall per draw.
     if (wake) {
         recorder_cv.notify_one();
-    }
-    if (!record_chunk) {
-        record_chunk = AcquireChunk();
     }
 }
 

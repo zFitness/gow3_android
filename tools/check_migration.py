@@ -158,6 +158,8 @@ MOVED = {
     'tests/test_launch_env.py': 'tests/migration/test_launch_env.py',
     'tests/test_backing_write.py': 'tests/migration/test_backing_write.py',
     'tests/test_frame_capture.py': 'tests/migration/test_frame_capture.py',
+    'tests/test_recording_chunk_ownership.cpp': 'tests/migration/test_recording_chunk_ownership.cpp',
+    'tests/test_recording_chunk_ownership.py': 'tests/migration/test_recording_chunk_ownership.py',
     'tests/test_recording_diagnostics.cpp': 'tests/migration/test_recording_diagnostics.cpp',
     'tests/test_recording_diagnostics.py': 'tests/migration/test_recording_diagnostics.py',
     'tests/test_render_pass_pairing.cpp': 'tests/migration/test_render_pass_pairing.cpp',

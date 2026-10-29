@@ -24,7 +24,9 @@
 #include "common/unique_function.h"
 #include "video_core/amdgpu/regs_color.h"
 #include "video_core/amdgpu/regs_primitive.h"
+#include "video_core/renderer_vulkan/vk_recording_chunk_holder.h"
 #include "video_core/renderer_vulkan/vk_recording_observer.h"
+#include "video_core/renderer_vulkan/vk_recording_ownership.h"
 #include "video_core/renderer_vulkan/vk_render_pass_pairing.h"
 #include "video_core/renderer_vulkan/vk_resource_pool.h"
 #include "video_core/renderer_vulkan/vk_semaphore.h"
@@ -740,6 +742,75 @@ public:
     /// SPARTAN_RECORDER_TRACE=1: prints the most frequent CommandBuffer() callers every 2000 calls.
     static void TraceDirectRecording(void* caller);
 
+    /// spartanport: 录制侧线程归属的诊断作用域（SPARTAN_PRODUCER_CHECK=1 开启，默认关闭）。
+    /// 进入时抢占归属：抢不到说明**另一个线程**也在录制侧，报告双方线程 id、线程名与
+    /// 入口名。关闭时构造与析构都是空操作（常态路径零开销）。诊断只暴露并发事实，不代表
+    /// 并发已被消除。
+    class OwnershipScope {
+    public:
+        OwnershipScope(Scheduler& scheduler_, const char* entry) noexcept
+            : scheduler{scheduler_}, entry{entry} {
+            if (!Enabled()) {
+                return;
+            }
+            const std::uint32_t self = CurrentThreadId();
+            std::uint32_t holder = 0;
+            if (scheduler.recording_ownership.Enter(self, holder)) {
+                acquired = true;
+                return;
+            }
+            // 持有者就是本线程：嵌套进入（例如 Record() 内部再调 RecordData()），不是并发。
+            if (holder != self) {
+                ReportConcurrentRecording(holder, entry);
+                concurrent = true;
+            }
+        }
+        ~OwnershipScope() noexcept {
+            if (!Enabled() || !acquired) {
+                return;
+            }
+            scheduler.recording_ownership.Leave();
+        }
+        OwnershipScope(const OwnershipScope&) = delete;
+        OwnershipScope& operator=(const OwnershipScope&) = delete;
+
+        /// 诊断是否开启（进程内只读一次）。
+        [[nodiscard]] static bool Enabled() noexcept {
+            static const bool enabled = [] {
+                const char* value = std::getenv("SPARTAN_PRODUCER_CHECK");
+                return value && value[0] == '1';
+            }();
+            return enabled;
+        }
+
+        /// 本次进入是否撞上了另一个线程（诊断用）。
+        [[nodiscard]] bool Concurrent() const noexcept {
+            return concurrent;
+        }
+
+    private:
+        Scheduler& scheduler;
+        const char* entry;
+        bool acquired{false};
+        bool concurrent{false};
+    };
+
+    /// spartanport: the current recording chunk, never null. The chunk that replaces it is
+    /// swapped in before the old one leaves (RetireChunk), so the pointer is always valid; the
+    /// null check is the last resort for a handover that raced with us: it hands out a fresh
+    /// chunk instead of a null dereference (a null record_chunk crashed SmallGuestCopy with a
+    /// read at address 0x20000).
+    RecordChunk& CurrentChunk() {
+        return chunk_holder.Current();
+    }
+
+    /// spartanport: moves the full current chunk aside; the replacement takes its place by
+    /// swap, so the current chunk is never empty in between (the old "move out, then install
+    /// the new one" left a window where record_chunk was null).
+    void RetireChunk() {
+        full_chunks.push_back(chunk_holder.Retire());
+    }
+
     /// Records `func(vk::CommandBuffer)` in order with other commands. The closure must own
     /// everything it uses (capture by value): it may run later on the recording thread.
     template <typename Func>
@@ -754,10 +825,11 @@ public:
             func(current_cmdbuf);
             return;
         }
-        if (!record_chunk->Push(std::forward<Func>(func))) {
-            full_chunks.push_back(std::move(record_chunk));
-            record_chunk = AcquireChunk();
-            const bool pushed = record_chunk->Push(std::forward<Func>(func));
+        // spartanport: 录制侧归属观测（诊断开启时报告两个线程同时在此）。
+        const OwnershipScope ownership{*this, "Record"};
+        if (!CurrentChunk().Push(std::forward<Func>(func))) {
+            RetireChunk();
+            const bool pushed = CurrentChunk().Push(std::forward<Func>(func));
             ASSERT(pushed);
         }
     }
@@ -775,9 +847,8 @@ public:
             return;
         }
         ASSERT(bytes + 1024 <= RecordChunk::Capacity);
-        if (RecordChunk::Capacity - record_chunk->Size() < bytes + 1024) {
-            full_chunks.push_back(std::move(record_chunk));
-            record_chunk = AcquireChunk();
+        if (RecordChunk::Capacity - CurrentChunk().Size() < bytes + 1024) {
+            RetireChunk();
         }
     }
 
@@ -791,7 +862,7 @@ public:
         // Room for the data and the command that follows it, so both stay in one chunk.
         const size_t bytes = data.size_bytes();
         ReserveRecordData(bytes + alignof(T));
-        auto* dst = static_cast<T*>(record_chunk->Allocate(bytes, alignof(T)));
+        auto* dst = static_cast<T*>(CurrentChunk().Allocate(bytes, alignof(T)));
         std::memcpy(dst, data.data(), bytes);
         return {dst, data.size()};
     }
@@ -894,6 +965,13 @@ private:
 
     void PriorityPendingOpsThread(std::stop_token stoken);
 
+    /// spartanport: 当前线程 id（诊断用；诊断关闭时不会被调用）。
+    static std::uint32_t CurrentThreadId();
+
+    /// spartanport: 报告"两个线程同时在录制侧"：双方线程 id、线程名与入口名。输出表明
+    /// 并发事实仍然存在，不代表并发已被消除。报告条数有上限。
+    static void ReportConcurrentRecording(std::uint32_t holder_tid, const char* entry);
+
 private:
     const Instance& instance;
     Semaphore work_semaphore;
@@ -921,8 +999,16 @@ private:
     // 在深度为 0 时说明记录侧没有对应开始命令（跨代错位），此时告警并跳过该命令，不让驱动解引用
     // 空 subpass。深度只统计"确实会录制的开始命令"，同 state 续接不重复递增；并发下是保守下界。
     RenderPassPairing render_pass_pairing;
+    // spartanport: 录制侧线程归属（诊断用，默认关闭）。录制侧设计上由一个线程独占，但 GPU
+    // 命令线程与绘制录制线程在交接窗口可能同时进入：本次真机崩溃（fault address 0x20000）
+    // 即绘制录制线程在 Record() 里读到已被交接置空的 chunk。此处只把并发事实变成可归因的
+    // 证据（双方线程 id 与入口名），不替代对 chunk 的保护——chunk 由 swap 语义保证永不为空。
+    RecordingOwnership recording_ownership;
     // spartanport: threaded recording
-    std::unique_ptr<RecordChunk> record_chunk;
+    // spartanport: 当前录制 chunk 的持有者（swap 语义，纯逻辑组件，生产路径与宿主行为测试
+    // 共用同一实现，见 vk_recording_chunk_holder.h）。当前 chunk 永不为空：交接时先取好
+    // 替换者再交换指针，"当前 chunk 为空"的中间态不可表达。
+    RecordingChunkHolder<RecordChunk> chunk_holder{[this] { return AcquireChunk(); }};
     std::vector<std::unique_ptr<RecordChunk>> full_chunks;
     std::mutex recorder_mutex;
     std::condition_variable_any recorder_cv;
