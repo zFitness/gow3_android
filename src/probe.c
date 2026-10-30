@@ -16,6 +16,7 @@
 #include "cheat_hook.h"
 #include "actor_hook.h"
 #include "qte_hook.h"
+#include "menu_hook.h"
 #include "damage_hook.h"
 #include "gpu/spartanportgpu.h"
 #if !defined(__GNUC__)
@@ -345,6 +346,28 @@ extern void spartanport_qte_status(int supported);
 extern uintptr_t spartanport_auto_qte_flag(void);
 extern void spartanport_engine_fps_globals(uintptr_t fps, uintptr_t rounded);
 
+/* 暂停菜单的 "Exit to Desktop" 行（src/menu_hook.h）：菜单脚本解释器的 builtin 调用位点。
+ * 行本身由 scripts/pause_menu.py 打在 R_UI.WAD 里（挂载即出现），位点钩子负责把那一行
+ * 点的 builtin 0xfff（游戏的 provider 表里没有这个 id）变成"结束进程"。 */
+static const char *pause_menu_wad;  /* --pause-menu 的 WAD 路径；NULL: 不装 */
+
+/* 结束进程的方式与 restart 一样：GPU、音频与 guest 线程都还在跑，不走析构。 */
+static void menu_quit(void) {
+    puts("Pause menu: Exit to Desktop");
+    fflush(NULL);
+#ifdef _WIN32
+    TerminateProcess(GetCurrentProcess(),0);
+#endif
+    _exit(0);
+}
+/* 与解释器原来的 vtable 调用同一个 ABI。没有 VM 参数被消费。 */
+static void ABI menu_setting(void *self, uint16_t function, uint64_t *result, void *args) {
+    (void)self;
+    (void)args;
+    *result = function >= 0xffd ? (uint64_t)spartanportgpu_enemy_health_bar(function == 0xffd)
+                              : spartanportgpu_native_setting(function);
+}
+
 /* 金手指安装器向镜像写入 x86-64 机器码 stub：x86-64 host 上 guest 直接跑在宿主 CPU，位点改写为
  * 0xe9 跳转进 trampoline；FEX JIT（ARM64）下镜像被懒翻译，位点改走 gport_guest_cpu_hook 的 syscall
  * 陷阱，host 侧 hook 把 rip 重定向到同一 trampoline。两路径共用下方签名定位，故任意构建只要代码
@@ -667,6 +690,31 @@ static void install_auto_qte_hooks(Segment *segments, uint64_t count, uint64_t s
     spartanport_qte_status(1);
     printf("Automatic QTE: ready for %d of %d prompt kinds (menu, Game)\n", ready + rotation, AUTO_QTE_SITES + 1);
 }
+
+/* 暂停菜单的 "Exit to Desktop"（src/menu_hook.h）：在菜单脚本解释器的 builtin 调用位点
+ * （签名扫描定位）改写 11 字节为跳板，stub 里按 function id 分发（0xfff → 退出进程，
+ * 0xf00..0xf60 / 0xffd / 0xffe → 我们的 settings provider，其余原样重放），再跳回原指令
+ * 流。钩子装好之后才把打好补丁的 R_UI.WAD 挂上去（否则那行点了没人处理）。 */
+static const uintptr_t menu_vtable[4] = {0, 0, 0, (uintptr_t)menu_setting};
+static const uintptr_t *menu_provider = menu_vtable;
+static void install_menu_exit(Segment *segments, uint64_t count, uint64_t size, const char *wad) {
+    const uint64_t at = spartanport_signature_find(image, size, &spartanport_menu_site);
+    if (at == UINT64_MAX || !mapped(segments, count, at, SPARTAN_MENU_HOOK_LENGTH) ||
+        !spartanport_menu_signature_match(image + at, size - at)) {
+        printf("Pause menu: Exit to Desktop unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    unsigned char *stub = allocate(page_size);
+    spartanport_menu_build_stub(stub, (uintptr_t)menu_quit, (uintptr_t)(image + at + SPARTAN_MENU_HOOK_LENGTH),
+                               (uintptr_t)&menu_provider);
+    protect(stub, page_size, 5);
+    if (!install_jump(at, SPARTAN_MENU_HOOK_LENGTH, stub)) {
+        puts("Pause menu: Exit to Desktop unavailable (hook outside relative-jump range)");
+        return;
+    }
+    runtime_file_mount("/app0/EXEC/WAD/PS4_LE/R_UI.WAD", wad);
+    puts("Pause menu: Exit to Desktop ready");
+}
 /* G3PATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
  * function pointers): the patch holds the address at the patches' base, rebased here. */
@@ -847,6 +895,58 @@ static void install_auto_qte_hooks_fex(Segment *segments, uint64_t count, uint64
     spartanport_qte_status(1);
     printf("FEX Automatic QTE: ready for %d of %d prompt kinds (menu, Game)\n", ready + rotation, AUTO_QTE_SITES + 1);
 }
+
+/* 暂停菜单的 "Exit to Desktop" 的 JIT 路径：镜像代码被翻译执行，不能像原生那样往镜像写
+ * 跳板——位点换成 2 字节 syscall 陷阱（与金手指、QTE 同一套机制），handler 把 rip 重定向
+ * 到 trampoline stub。stub 的字节与上游完全一致（0xfff → 退出进程，0xf00..0xf60 /
+ * 0xffd / 0xffe → 我们的 settings provider，其余原样重放）；只有两处不同：
+ *   - stub 里调的"退出"必须是 guest 可调用的蹦床（gport_guest_cpu_host_function），
+ *     客机不能直接跳到宿主的原生地址；
+ *   - provider vtable 里那一项同理，放蹦床地址而不是宿主函数地址。
+ * 钩子装好之后才把打好补丁的 R_UI.WAD 挂上去（否则那行点了没人处理）。 */
+static uintptr_t menu_vtable[4] = {0, 0, 0, 0};
+static const uintptr_t *menu_provider = menu_vtable;
+typedef struct { uintptr_t addr, target; } SpartanMenuRedirect;
+static SpartanMenuRedirect spartanport_menu_redirects[4];
+static unsigned spartanport_menu_redirect_count;
+static void menu_redirect(GuestRegs *regs) {
+    for (unsigned i = 0; i < spartanport_menu_redirect_count; ++i)
+        if (spartanport_menu_redirects[i].addr == regs->rip) {
+            regs->rip = spartanport_menu_redirects[i].target;
+            return;
+        }
+    regs->rip += 2;  /* unknown site: step past the syscall */
+}
+static int menu_redirect_add(uintptr_t addr, uintptr_t target) {
+    if (spartanport_menu_redirect_count >= 4) return 0;
+    if (!gport_guest_cpu_hook(addr, 2, menu_redirect)) return 0;
+    spartanport_menu_redirects[spartanport_menu_redirect_count].addr = addr;
+    spartanport_menu_redirects[spartanport_menu_redirect_count].target = target;
+    ++spartanport_menu_redirect_count;
+    return 1;
+}
+static void install_menu_exit_fex(Segment *segments, uint64_t count, uint64_t size, const char *wad) {
+    const uint64_t at = spartanport_signature_find(image, size, &spartanport_menu_site);
+    if (at == UINT64_MAX || !mapped(segments, count, at, SPARTAN_MENU_HOOK_LENGTH) ||
+        !spartanport_menu_signature_match(image + at, size - at)) {
+        printf("FEX Pause menu: Exit to Desktop unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    menu_vtable[3] = (uintptr_t)gport_guest_cpu_host_function((void *)menu_setting);
+    const uintptr_t quit = (uintptr_t)gport_guest_cpu_host_function((void *)menu_quit);
+    unsigned char *stub = allocate(page_size);
+    spartanport_menu_build_stub(stub, quit, (uintptr_t)(image + at + SPARTAN_MENU_HOOK_LENGTH),
+                               (uintptr_t)&menu_provider);
+    protect(stub, page_size, 5);
+    /* trampoline 在游戏镜像之外：注册为 guest 代码，JIT 才会翻译它。 */
+    gport_guest_cpu_code((uintptr_t)stub, page_size);
+    if (!menu_redirect_add((uintptr_t)(image + at), (uintptr_t)stub)) {
+        printf("FEX Pause menu: Exit to Desktop unavailable (JIT hook rejected at 0x%lx)\n", (unsigned long)at);
+        return;
+    }
+    runtime_file_mount("/app0/EXEC/WAD/PS4_LE/R_UI.WAD", wad);
+    puts("FEX Pause menu: Exit to Desktop ready");
+}
 #endif
 
 static void apply_patches(const char *path, Segment *segments, uint64_t ns, const Reloc *relocs, uint64_t nr) {
@@ -949,10 +1049,10 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "--user") && i+1<argc) user_dir=argv[++i];
         else if (!strcmp(argv[i], "--patches") && i+1<argc) patch_file=argv[++i];
         else if (!strcmp(argv[i], "--timeout") && i+1<argc) timeout_seconds=(unsigned)strtoul(argv[++i],NULL,10);
-        /* gport: 上游 launcher 会传 --pause-menu <模式>（游戏内暂停菜单的 Exit-to-Desktop）。
-         * 该功能随 FEX loader 重写裁掉了（触摸覆盖层 UI 替代）——此处接受并忽略，
-         * 不让 launcher 的合法参数导致启动失败。 */
-        else if (!strcmp(argv[i], "--pause-menu") && i+1<argc) { ++i; }
+        /* gport: 上游 launcher 会传 --pause-menu <WAD>（游戏内暂停菜单的 Exit-to-Desktop 行：
+         * 行本身由 scripts/pause_menu.py 打在 R_UI.WAD 里，位点钩子由 install_menu_exit 装
+         * 上——FEX 路径走陷阱，见下）。原来这里"接受并忽略"，现在存值传给安装器。 */
+        else if (!strcmp(argv[i], "--pause-menu") && i+1<argc) { pause_menu_wad = argv[++i]; }
         else { fprintf(stderr, "Unknown option: %s\n", argv[i]); return 1; }
     }
     if (argc < 2) {
@@ -1188,6 +1288,7 @@ if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     if (gpu_enabled) install_actor_watch(app0, segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(app0, segments, ns, size);
     if (gpu_enabled) install_auto_qte_hooks(segments, ns, size, install_qte_hooks(segments, ns, size));
+    if (gpu_enabled && pause_menu_wad && app0) install_menu_exit(segments, ns, size, pause_menu_wad);
 #else
     /* FEX JIT：金手指经 gport_guest_cpu_hook（syscall 陷阱 + rip 重定向到 trampoline stub）
      * 在 install_cheats 中安装；orb/敌血条/伤害倍率安装器仍需各自的 JIT 路径，暂不安装。 */
@@ -1195,6 +1296,8 @@ if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     else printf("FEX Cheats: OFF - the GPU library was not initialized (no cheats installed)\n");
     /* QTE 提示与 Automatic QTE 走同一条陷阱路径（各自的位点与 trampoline）。 */
     if (gpu_enabled) install_auto_qte_hooks_fex(segments, ns, size, install_qte_hooks_fex(segments, ns, size));
+    /* 暂停菜单的 Exit to Desktop：位点走陷阱路径，WAD 由安装器在钩子装好后挂上。 */
+    if (gpu_enabled && pause_menu_wad && app0) install_menu_exit_fex(segments, ns, size, pause_menu_wad);
 #endif
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
