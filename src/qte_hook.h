@@ -153,6 +153,33 @@ static inline unsigned spartanport_qte_build_repeat_stub(unsigned char *out, uin
     memcpy(out + 2, &automatic, 8);
     return spartanport_qte_jump(out, sizeof(body), original);  /* original: the game's own answer */
 }
+/* FEX JIT 路径的 repeat 变体：位点被换成 2 字节 syscall 陷阱（不是 call），所以栈上没有 call
+ * 压下的返回地址，原生版的 "ret" 与 "je original" 尾跳都不成立。这里拆成两条路：自动按下的
+ * 路径不压栈，带着 eax=1 直接跳回 call 之后（调用点的栈就是返回后的栈）；走游戏原函数的
+ * 路径自己压一个返回地址（call 的语义：原函数 ret 时回到 call 之后），压栈前 rsp 在调用点
+ * 满足 16 字节对齐，压 8 字节后正好是被调方入口的期望值。 */
+static inline unsigned spartanport_qte_build_repeat_stub_fex(unsigned char *out, uintptr_t automatic,
+                                                     uintptr_t original, uintptr_t resume) {
+    static const unsigned char body[] = {
+        0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, auto */
+        0x80,0x38,0x00,                           /* cmp byte [rax], 0 */
+        0x74,0x13,                                /* je original_path */
+        0xb8,0x01,0x00,0x00,0x00,                 /* mov eax, 1: pressed */
+    };
+    memcpy(out, body, sizeof(body));
+    memcpy(out + 2, &automatic, 8);
+    unsigned n = spartanport_qte_jump(out, sizeof(body), resume);  /* pressed: back into the game */
+    static const unsigned char call_body[] = {
+        0x48,0x83,0xec,0x08,                      /* original_path: sub rsp, 8 */
+        0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, resume */
+        0x48,0x89,0x04,0x24,                      /* mov [rsp], rax */
+    };
+    memcpy(out + n, call_body, sizeof(call_body));
+    memcpy(out + n + 6, &resume, 8);
+    n += sizeof(call_body);
+    return spartanport_qte_jump(out, n, original);  /* the game's own answer */
+}
+
 /* The call's target, from its rel32. */
 static inline uint64_t spartanport_qte_call_target(const unsigned char *code, uint64_t site) {
     int32_t relative;

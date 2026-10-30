@@ -15,6 +15,7 @@
 #include "orb_hook.h"
 #include "cheat_hook.h"
 #include "actor_hook.h"
+#include "qte_hook.h"
 #include "damage_hook.h"
 #include "gpu/spartanportgpu.h"
 #if !defined(__GNUC__)
@@ -339,6 +340,10 @@ extern void spartanport_cheat_status(unsigned id);
 extern uintptr_t spartanport_damage_multiplier(int taken);
 extern uintptr_t spartanport_orb_pickup_multiplier(unsigned kind);
 extern void spartanport_stat_multipliers_status(int damage, int orb_pickup);
+extern uintptr_t spartanport_qte_state_address(void);
+extern void spartanport_qte_status(int supported);
+extern uintptr_t spartanport_auto_qte_flag(void);
+extern void spartanport_engine_fps_globals(uintptr_t fps, uintptr_t rounded);
 
 /* 金手指安装器向镜像写入 x86-64 机器码 stub：x86-64 host 上 guest 直接跑在宿主 CPU，位点改写为
  * 0xe9 跳转进 trampoline；FEX JIT（ARM64）下镜像被懒翻译，位点改走 gport_guest_cpu_hook 的 syscall
@@ -385,6 +390,42 @@ static int cheat_identity(const char *app0) {
     printf("FEX Cheats: OFF - unsupported game identity %s %s (no cheats installed)\n",
            serial[0] ? serial : "<none>", version[0] ? version : "<none>");
     return 0;
+}
+
+/* Automatic QTE 的四个提示位点（定时按键、连打、蓄力长按、圆圈狂按），两条路径共用同一组签名。 */
+enum { AUTO_QTE_SITES = 4 };
+
+/* 游戏的实时帧率全局（上游 windows-v2.7.0 的 find_engine_fps）：引擎在启动时以 59.94 调用一次
+ * 帧率 setter，把上限帧率存成 float 与取整值两个全局，每帧的帧时都读它们。客机的
+ * SyncEngineFps 写这两个地址，"引擎帧率"菜单项才是活的（帧率补丁改的是那个常量本身）。
+ * 两条路径共用：写的是镜像里的数据，JIT 与原生 CPU 看到的都是同一块内存。 */
+static const SpartanSignature engine_fps_setter={
+    "48 8d 05 ?? ?? ?? ?? c5 fa 11 00 c5 fa 58 0d ?? ?? ?? ?? c5 fa 2c c1 48 8d 0d ?? ?? ?? ?? 89 01",0};
+static uint64_t engine_fps_at, engine_rounded_at; /* image offsets; 0: not found */
+/* 镜像受保护之前：签名搜索会连段间空隙一起读。 */
+static void find_engine_fps(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t at=spartanport_signature_find(image,size,&engine_fps_setter);
+    if (at==UINT64_MAX) {
+        puts("Engine FPS: live frame rate unavailable (code not found in this eboot.bin)");
+        return;
+    }
+    int32_t fps_displacement, rounded_displacement;
+    memcpy(&fps_displacement,image+at+3,4);      /* lea rax, [rip+fps] */
+    memcpy(&rounded_displacement,image+at+26,4); /* lea rcx, [rip+rounded] */
+    const uint64_t fps=(uint64_t)((int64_t)at+7+fps_displacement);
+    const uint64_t rounded=(uint64_t)((int64_t)at+30+rounded_displacement);
+    if (!mapped(segments,count,fps,4) || !mapped(segments,count,rounded,4)) {
+        puts("Engine FPS: live frame rate unavailable (globals outside the image)");
+        return;
+    }
+    engine_fps_at=fps;
+    engine_rounded_at=rounded;
+}
+/* 镜像受保护之后：present 线程每帧读那两个全局，两次 protect 之间镜像不可访问。 */
+static void publish_engine_fps(void) {
+    if (!engine_fps_at) return;
+    spartanport_engine_fps_globals((uintptr_t)(image+engine_fps_at),(uintptr_t)(image+engine_rounded_at));
+    puts("Engine FPS: live frame rate ready (menu, R3 + L1 + R1 or F9)");
 }
 
 #if defined(GUEST_CPU_NATIVE)
@@ -535,6 +576,97 @@ static void install_stat_multipliers(const char *app0, Segment *segments, uint64
     printf("Multipliers: damage %s, green/blue/gold orbs %s\n", damage ? "ready" : "unavailable",
            pickup ? "ready" : "unavailable");
 }
+/* QTE 提示（src/qte_hook.h）：提示的 update 里记心跳、旋转判定里作答——启动器的摇杆提示与
+ * Automatic QTE 都靠它。两处要么都装上，要么都不装；装上之前它们什么都不做。返回是否装成。 */
+static int install_qte_hooks(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t sites[2] = {spartanport_signature_find(image, size, &spartanport_qte_update_site),
+                               spartanport_signature_find(image, size, &spartanport_qte_rotation_site)};
+    const unsigned char *originals[2] = {spartanport_qte_update_original, spartanport_qte_rotation_original};
+    for (unsigned i = 0; i < 2; ++i) {
+        if (sites[i] == UINT64_MAX || !mapped(segments, count, sites[i], SPARTAN_QTE_BLOCK_NEXT) ||
+            memcmp(image + sites[i], originals[i], SPARTAN_QTE_HOOK_LENGTH)) {
+            printf("Stick prompts: unavailable (code not found in this eboot.bin)\n");
+            return 0;
+        }
+    }
+    const uint64_t block = spartanport_qte_block(image + sites[1], sites[1]);
+    if (!mapped(segments, count, block, SPARTAN_QTE_TYPE_OFFSET + 2)) {
+        printf("Stick prompts: unavailable (prompt state outside the image)\n");
+        return 0;
+    }
+    unsigned char *stubs = allocate(page_size);
+    int32_t relative[2];
+    for (unsigned i = 0; i < 2; ++i) {
+        const int64_t delta = (int64_t)(uintptr_t)(stubs + i * 128) - (int64_t)(uintptr_t)(image + sites[i] + 5);
+        if (delta < INT32_MIN || delta > INT32_MAX) {
+            printf("Stick prompts: unavailable (hook outside relative-jump range)\n");
+            return 0;
+        }
+        relative[i] = (int32_t)delta;
+    }
+    SpartanQteState *state = (SpartanQteState *)spartanport_qte_state_address();
+    spartanport_qte_build_update_stub(stubs, (uintptr_t)&state->heartbeat,
+                               (uintptr_t)(image + sites[0] + SPARTAN_QTE_HOOK_LENGTH));
+    spartanport_qte_build_rotation_stub(stubs + 128, (uintptr_t)&state->pass, spartanport_auto_qte_flag(),
+                                 (uintptr_t)(image + sites[1] + SPARTAN_QTE_HOOK_LENGTH));
+    protect(stubs, page_size, 5);
+    for (unsigned i = 0; i < 2; ++i) {
+        image[sites[i]] = 0xe9;
+        memcpy(image + sites[i] + 1, &relative[i], 4);
+        memset(image + sites[i] + 5, 0x90, SPARTAN_QTE_HOOK_LENGTH - 5);
+    }
+    state->block = (uint64_t)(uintptr_t)(image + block);
+    printf("Stick prompts: rotation prompt hooks ready\n");
+    return 1;
+}
+
+/* Automatic QTE（src/qte_hook.h）：定时按键的按键判定、连打的按键查询、蓄力长按的按住位、圆圈
+ * 狂按；旋转提示走上面的旋转 stub。四个位点各自独立：找不到的那个把那类提示留给玩家自己按。 */
+static void install_auto_qte_hooks(Segment *segments, uint64_t count, uint64_t size, int rotation) {
+    const SpartanSignature *signatures[AUTO_QTE_SITES] = {&spartanport_qte_timed_site, &spartanport_qte_repeat_site,
+                                                       &spartanport_qte_charged_site, &spartanport_qte_circle_site};
+    const unsigned lengths[AUTO_QTE_SITES] = {SPARTAN_QTE_TIMED_LENGTH, 5, SPARTAN_QTE_CHARGED_LENGTH,
+                                              SPARTAN_QTE_CIRCLE_LENGTH};
+    const char *names[AUTO_QTE_SITES] = {"button", "repeated press", "held press", "Circle struggle"};
+    const uintptr_t automatic = spartanport_auto_qte_flag();
+    unsigned char *stubs = allocate(page_size);
+    uint64_t sites[AUTO_QTE_SITES];
+    int32_t relative[AUTO_QTE_SITES] = {0};
+    int ready = 0;
+    for (unsigned i = 0; i < AUTO_QTE_SITES; ++i) {
+        sites[i] = spartanport_signature_find(image, size, signatures[i]);
+        if (sites[i] == UINT64_MAX || !mapped(segments, count, sites[i], lengths[i])) {
+            printf("Automatic QTE: %s prompts unavailable (code not found in this eboot.bin)\n", names[i]);
+            sites[i] = UINT64_MAX;
+            continue;
+        }
+        unsigned char *stub = stubs + i * 128;
+        const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + sites[i] + 5);
+        if (delta < INT32_MIN || delta > INT32_MAX) {
+            printf("Automatic QTE: %s prompts unavailable (hook outside relative-jump range)\n", names[i]);
+            sites[i] = UINT64_MAX;
+            continue;
+        }
+        relative[i] = (int32_t)delta;
+        const uintptr_t resume = (uintptr_t)(image + sites[i] + lengths[i]);
+        if (i == 0) spartanport_qte_build_timed_stub(stub, automatic, resume);
+        else if (i == 1) spartanport_qte_build_repeat_stub(stub, automatic,
+                                                    (uintptr_t)(image + spartanport_qte_call_target(image + sites[i], sites[i])));
+        else if (i == 2) spartanport_qte_build_charged_stub(stub, automatic, resume);
+        else spartanport_qte_build_circle_stub(stub, automatic, resume, (uintptr_t)(image + sites[i] + SPARTAN_QTE_CIRCLE_SKIP));
+    }
+    protect(stubs, page_size, 5);
+    for (unsigned i = 0; i < AUTO_QTE_SITES; ++i) {
+        if (sites[i] == UINT64_MAX) continue;
+        image[sites[i]] = i == 1 ? 0xe8 : 0xe9;  /* the repeat site stays a call */
+        memcpy(image + sites[i] + 1, &relative[i], 4);
+        memset(image + sites[i] + 5, 0x90, lengths[i] - 5);
+        ++ready;
+    }
+    if (!ready && !rotation) return;
+    spartanport_qte_status(1);
+    printf("Automatic QTE: ready for %d of %d prompt kinds (menu, Game)\n", ready + rotation, AUTO_QTE_SITES + 1);
+}
 /* G3PATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
  * function pointers): the patch holds the address at the patches' base, rebased here. */
@@ -609,6 +741,111 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
         printf("FEX Cheats: %s READY, %u verified site(s), selected=%d, first=0x%lx\n",
                spartanport_cheat_names[id], verified, selected, (unsigned long)first);
     }
+}
+
+/* QTE 提示（src/qte_hook.h）的 JIT 路径：位点换成 2 字节 syscall 陷阱，陷阱 handler 把 rip
+ * 重定向到 trampoline stub，stub 自己重放被替换的原始字节再跳回（与上面的金手指同款机制）。
+ * 宿主侧的开关字节（菜单的 Automatic QTE）与计数跟客机同地址空间（actor slots 先例），所以
+ * stub 能直接读写它们，不需要跨边界调用。 */
+typedef struct { uintptr_t addr, target; } SpartanQteRedirect;
+static SpartanQteRedirect spartanport_qte_redirects[16];
+static unsigned spartanport_qte_redirect_count;
+static void qte_redirect(GuestRegs *regs) {
+    for (unsigned i = 0; i < spartanport_qte_redirect_count; ++i)
+        if (spartanport_qte_redirects[i].addr == regs->rip) {
+            regs->rip = spartanport_qte_redirects[i].target;
+            return;
+        }
+    regs->rip += 2;  /* unknown site: step past the syscall */
+}
+static int qte_redirect_add(uintptr_t addr, uintptr_t target) {
+    if (spartanport_qte_redirect_count >= 16) return 0;
+    if (!gport_guest_cpu_hook(addr, 2, qte_redirect)) return 0;
+    spartanport_qte_redirects[spartanport_qte_redirect_count].addr = addr;
+    spartanport_qte_redirects[spartanport_qte_redirect_count].target = target;
+    ++spartanport_qte_redirect_count;
+    return 1;
+}
+/* 摇杆提示：提示的 update 里记心跳、旋转判定里作答。两个位点都是函数入口（游戏的 call 已经
+ * 把返回地址压栈），所以 stub 重放原始字节或直接 ret 都不必自己管栈。 */
+static int install_qte_hooks_fex(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t sites[2] = {spartanport_signature_find(image, size, &spartanport_qte_update_site),
+                               spartanport_signature_find(image, size, &spartanport_qte_rotation_site)};
+    const unsigned char *originals[2] = {spartanport_qte_update_original, spartanport_qte_rotation_original};
+    for (unsigned i = 0; i < 2; ++i) {
+        if (sites[i] == UINT64_MAX || !mapped(segments, count, sites[i], SPARTAN_QTE_BLOCK_NEXT) ||
+            memcmp(image + sites[i], originals[i], SPARTAN_QTE_HOOK_LENGTH)) {
+            printf("FEX Stick prompts: unavailable (code not found in this eboot.bin)\n");
+            return 0;
+        }
+    }
+    const uint64_t block = spartanport_qte_block(image + sites[1], sites[1]);
+    if (!mapped(segments, count, block, SPARTAN_QTE_TYPE_OFFSET + 2)) {
+        printf("FEX Stick prompts: unavailable (prompt state outside the image)\n");
+        return 0;
+    }
+    unsigned char *stubs = allocate(page_size);
+    SpartanQteState *state = (SpartanQteState *)spartanport_qte_state_address();
+    spartanport_qte_build_update_stub(stubs, (uintptr_t)&state->heartbeat,
+                               (uintptr_t)(image + sites[0] + SPARTAN_QTE_HOOK_LENGTH));
+    spartanport_qte_build_rotation_stub(stubs + 128, (uintptr_t)&state->pass, spartanport_auto_qte_flag(),
+                                 (uintptr_t)(image + sites[1] + SPARTAN_QTE_HOOK_LENGTH));
+    protect(stubs, page_size, 5);
+    /* trampoline 在游戏镜像之外，FEX 解码器只翻译 guest CPU 报告为可执行范围的地址。 */
+    gport_guest_cpu_code((uintptr_t)stubs, page_size);
+    for (unsigned i = 0; i < 2; ++i) {
+        if (!qte_redirect_add((uintptr_t)(image + sites[i]), (uintptr_t)(stubs + i * 128))) {
+            printf("FEX Stick prompts: unavailable (JIT hook rejected at 0x%lx)\n", (unsigned long)sites[i]);
+            return 0;
+        }
+    }
+    state->block = (uint64_t)(uintptr_t)(image + block);
+    printf("FEX Stick prompts: rotation prompt hooks ready\n");
+    return 1;
+}
+
+/* Automatic QTE（src/qte_hook.h）的 JIT 路径：四个提示位点各自独立，找不到的那个把那类提示
+ * 留给玩家自己按。repeat 位点是函数里的一次 call（不是函数入口），陷阱模型下没有 call 压下的
+ * 返回地址，所以它用 qte_hook.h 里的 FEX 变体 stub：自动按下的路径不压栈直接跳回 call 之后，
+ * 走游戏原函数的路径自己压一个返回地址。 */
+static void install_auto_qte_hooks_fex(Segment *segments, uint64_t count, uint64_t size, int rotation) {
+    const SpartanSignature *signatures[AUTO_QTE_SITES] = {&spartanport_qte_timed_site, &spartanport_qte_repeat_site,
+                                                       &spartanport_qte_charged_site, &spartanport_qte_circle_site};
+    const unsigned lengths[AUTO_QTE_SITES] = {SPARTAN_QTE_TIMED_LENGTH, 5, SPARTAN_QTE_CHARGED_LENGTH,
+                                              SPARTAN_QTE_CIRCLE_LENGTH};
+    const char *names[AUTO_QTE_SITES] = {"button", "repeated press", "held press", "Circle struggle"};
+    const uintptr_t automatic = spartanport_auto_qte_flag();
+    unsigned char *stubs = allocate(page_size);
+    uint64_t sites[AUTO_QTE_SITES];
+    int ready = 0;
+    for (unsigned i = 0; i < AUTO_QTE_SITES; ++i) {
+        sites[i] = spartanport_signature_find(image, size, signatures[i]);
+        if (sites[i] == UINT64_MAX || !mapped(segments, count, sites[i], lengths[i])) {
+            printf("FEX Automatic QTE: %s prompts unavailable (code not found in this eboot.bin)\n", names[i]);
+            sites[i] = UINT64_MAX;
+            continue;
+        }
+        unsigned char *stub = stubs + i * 128;
+        const uintptr_t resume = (uintptr_t)(image + sites[i] + lengths[i]);
+        if (i == 0) spartanport_qte_build_timed_stub(stub, automatic, resume);
+        else if (i == 1) spartanport_qte_build_repeat_stub_fex(stub, automatic,
+                                                    (uintptr_t)(image + spartanport_qte_call_target(image + sites[i], sites[i])), resume);
+        else if (i == 2) spartanport_qte_build_charged_stub(stub, automatic, resume);
+        else spartanport_qte_build_circle_stub(stub, automatic, resume, (uintptr_t)(image + sites[i] + SPARTAN_QTE_CIRCLE_SKIP));
+    }
+    protect(stubs, page_size, 5);
+    gport_guest_cpu_code((uintptr_t)stubs, page_size);
+    for (unsigned i = 0; i < AUTO_QTE_SITES; ++i) {
+        if (sites[i] == UINT64_MAX) continue;
+        if (!qte_redirect_add((uintptr_t)(image + sites[i]), (uintptr_t)(stubs + i * 128))) {
+            printf("FEX Automatic QTE: %s prompts unavailable (JIT hook rejected)\n", names[i]);
+            continue;
+        }
+        ++ready;
+    }
+    if (!ready && !rotation) return;
+    spartanport_qte_status(1);
+    printf("FEX Automatic QTE: ready for %d of %d prompt kinds (menu, Game)\n", ready + rotation, AUTO_QTE_SITES + 1);
 }
 #endif
 
@@ -938,7 +1175,9 @@ int main(int argc, char **argv) {
         fflush(NULL);
         _exit(missing ? 1 : 0); /* no destructors: GPU threads are running */
     }
-    if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
+if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
+    /* 引擎帧率的两个全局要在镜像受保护之前定位（签名搜索要连段间空隙一起读）。 */
+    if (gpu_enabled) find_engine_fps(segments, ns, size);
 #if defined(GUEST_CPU_NATIVE)
     /* These hooks write x86-64 machine-code stubs straight into the image (0xe9 jumps), which is
      * only meaningful when the game's code runs on the host CPU. Under the JIT the image is
@@ -948,16 +1187,19 @@ int main(int argc, char **argv) {
     if (gpu_enabled) install_cheats(app0, segments, ns, size);
     if (gpu_enabled) install_actor_watch(app0, segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(app0, segments, ns, size);
+    if (gpu_enabled) install_auto_qte_hooks(segments, ns, size, install_qte_hooks(segments, ns, size));
 #else
     /* FEX JIT：金手指经 gport_guest_cpu_hook（syscall 陷阱 + rip 重定向到 trampoline stub）
      * 在 install_cheats 中安装；orb/敌血条/伤害倍率安装器仍需各自的 JIT 路径，暂不安装。 */
     if (gpu_enabled) install_cheats(app0, segments, ns, size);
     else printf("FEX Cheats: OFF - the GPU library was not initialized (no cheats installed)\n");
+    /* QTE 提示与 Automatic QTE 走同一条陷阱路径（各自的位点与 trampoline）。 */
+    if (gpu_enabled) install_auto_qte_hooks_fex(segments, ns, size, install_qte_hooks_fex(segments, ns, size));
 #endif
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif
-    protect(traps, round_page((import_count + 1) * 32), 5);
+protect(traps, round_page((import_count + 1) * 32), 5);
     protect(image, round_page(size), 0);
     int executable_entry = 0;
     for (uint64_t i = 0; i < ns; ++i) {
@@ -967,6 +1209,8 @@ int main(int argc, char **argv) {
     }
     if (!executable_entry) fail("entry is not executable");
     printf("Mapped %" PRIu64 " bytes, %" PRIu64 " segments; applied %" PRIu64 " relocations\n", size, ns, nr);
+    /* 镜像受保护之后：present 线程每帧读那两个帧率全局。 */
+    if (gpu_enabled) publish_engine_fps();
     if (native_libc) {
         for (uint64_t m=0;m<module_count;++m) {
             int init_executable=0;
