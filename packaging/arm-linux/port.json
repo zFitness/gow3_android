@@ -18,6 +18,7 @@
   "storage": {
     "home": "home"
   },
+  "virtualKeys": "virtualkeys.json",
   "logs": [
     "home/gport/logs/launch.log"
   ]

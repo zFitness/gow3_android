@@ -245,27 +245,34 @@ mkdir -p "$dist"
 appimage_out=$out/pkg/SpartanPort-arm64.AppImage
 PATH="$shim:$PATH" bash "$fexdroid_tools/scripts/build-port-appimage.sh" "$appdir" "$appimage_out"
 
-# Port 分发包 = .zip：包根恰含 port.json 与恰好一个 .AppImage（Port打包规范.md §2/§6.1；
-# 归档形态只有 .zip 一种——tar/tar.gz 不再是导入通道，宿主选中即报错）。
+# Port 分发包 = .zip：包根含 port.json、恰好一个 .AppImage，以及可选的虚拟按键布局
+# （Port打包规范.md §2/§3.2/§6.1；归档形态只有 .zip 一种——tar/tar.gz 不再是导入通道，
+# 宿主选中即报错）。
 # 不用 shell 的 zip：Python 的 zipfile 写出的条目名不带 macOS 的 ._ 垃圾，条目数也能断言。
-python3 - "$dist/spartanport-port.zip" "$out/pkg/port.json" "$out/pkg/SpartanPort-arm64.AppImage" <<'PY'
+virtualkeys=packaging/arm-linux/virtualkeys.json
+python3 - "$dist/spartanport-port.zip" "$out/pkg/port.json" "$out/pkg/SpartanPort-arm64.AppImage" "$virtualkeys" <<'PY'
+import os
 import sys
 import zipfile
 
-target, manifest, appimage = sys.argv[1:4]
+target, manifest, appimage, virtualkeys = sys.argv[1:5]
 with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
     archive.write(manifest, 'port.json')
     archive.write(appimage, 'SpartanPort-arm64.AppImage')
+    # 虚拟按键布局（可选）：manifest 的 virtualKeys 指向它，宿主导入时物化成每游戏默认布局。
+    if os.path.isfile(virtualkeys):
+        archive.write(virtualkeys, os.path.basename(virtualkeys))
 PY
-# 验收：包根恰含两个条目（一份 manifest + 一个 AppImage）。
+# 验收：包根恰含 manifest + 一个 AppImage（+ 可选的虚拟按键布局）。
 python3 - "$dist/spartanport-port.zip" <<'PY'
 import sys
 import zipfile
 
 names = sorted(zipfile.ZipFile(sys.argv[1]).namelist())
 expected = ['SpartanPort-arm64.AppImage', 'port.json']
-if names != expected:
-    raise SystemExit(f'port package must contain exactly {expected}, got {names}')
+extra = [n for n in names if n not in expected]
+if names[:2] != expected or any(n not in expected and n != 'virtualkeys.json' for n in names):
+    raise SystemExit(f'port package must contain exactly {expected} (plus virtualkeys.json), got {names}')
 PY
 end_stage "$dist/spartanport-port.zip ($(du -m "$dist/spartanport-port.zip" | cut -f1) MB)"
 
