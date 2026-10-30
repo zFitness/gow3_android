@@ -66,25 +66,29 @@ class QteFexStubTests(unittest.TestCase):
         line = next((l for l in run.stdout.splitlines() if l.startswith('bytes:')), '')
         self.assertTrue(line, run.stdout)
         code = bytes(int(part, 16) for part in line.split()[1:])
-        self.assertEqual(len(code), 66)
+        self.assertEqual(len(code), 76)
         # The menu's Automatic QTE byte, then the test on it.
         self.assertEqual(code[0:2], b'\x48\xb8')
         self.assertEqual(code[10:13], b'\x80\x38\x00')
-        # The game's own path: je over the automatic path to the sub rsp, 8.
-        self.assertEqual(code[13:15], b'\x74\x13')
-        self.assertEqual(code[34:38], b'\x48\x83\xec\x08')
-        # The automatic path: mov eax, 1 and a jump to the game's code after the call.
-        self.assertEqual(code[15:20], b'\xb8\x01\x00\x00\x00')
-        self.assertEqual(code[20:26], b'\xff\x25\x00\x00\x00\x00')
+        # The game's own path: je over the automatic path to the sub rsp, 8 (15 + 0x1d = 44).
+        self.assertEqual(code[13:15], b'\x74\x1d')
+        self.assertEqual(code[44:48], b'\x48\x83\xec\x08')
+        # The automatic path: the press credit (the frame time into the state at rbx+8), then
+        # mov eax, 1 and a jump to the game's code after the call. Without the credit the mash
+        # prompt's bar never fills and the prompt never completes.
+        self.assertEqual(code[15:20], b'\xc5\xfa\x10\x45\xc4')
+        self.assertEqual(code[20:25], b'\xc5\xfa\x11\x43\x08')
+        self.assertEqual(code[25:30], b'\xb8\x01\x00\x00\x00')
+        self.assertEqual(code[30:36], b'\xff\x25\x00\x00\x00\x00')
         # The game's own path: push the address to come back to, then jump into the game.
-        self.assertEqual(code[38:40], b'\x48\xb8')
-        self.assertEqual(code[48:52], b'\x48\x89\x04\x24')
-        self.assertEqual(code[52:58], b'\xff\x25\x00\x00\x00\x00')
+        self.assertEqual(code[48:50], b'\x48\xb8')
+        self.assertEqual(code[58:62], b'\x48\x89\x04\x24')
+        self.assertEqual(code[62:68], b'\xff\x25\x00\x00\x00\x00')
         # Both jumps carry their target right after them, and the resume address is the same in
         # both places: the automatic path jumps back into the game, the other path pushes it.
-        resume = code[26:34]
-        self.assertEqual(code[40:48], resume)
-        self.assertNotEqual(code[58:66], resume)
+        resume = code[36:44]
+        self.assertEqual(code[50:58], resume)
+        self.assertNotEqual(code[68:76], resume)
 
 
 class QteProbeWiringTests(unittest.TestCase):

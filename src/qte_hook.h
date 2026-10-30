@@ -157,13 +157,18 @@ static inline unsigned spartanport_qte_build_repeat_stub(unsigned char *out, uin
  * 压下的返回地址，原生版的 "ret" 与 "je original" 尾跳都不成立。这里拆成两条路：自动按下的
  * 路径不压栈，带着 eax=1 直接跳回 call 之后（调用点的栈就是返回后的栈）；走游戏原函数的
  * 路径自己压一个返回地址（call 的语义：原函数 ret 时回到 call 之后），压栈前 rsp 在调用点
- * 满足 16 字节对齐，压 8 字节后正好是被调方入口的期望值。 */
+ * 满足 16 字节对齐，压 8 字节后正好是被调方入口的期望值。
+ *
+ * 自动路径与原生版一样要做两件事：把这一帧的时间写进提示状态 [rbx+8]（连打提示的按压额度，
+ * 少了它进度条永远不涨、提示永远过不去），再回答 eax=1。 */
 static inline unsigned spartanport_qte_build_repeat_stub_fex(unsigned char *out, uintptr_t automatic,
                                                      uintptr_t original, uintptr_t resume) {
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, auto */
         0x80,0x38,0x00,                           /* cmp byte [rax], 0 */
-        0x74,0x13,                                /* je original_path */
+        0x74,0x1d,                                /* je original_path */
+        0xc5,0xfa,0x10,0x45,0xc4,                 /* vmovss xmm0, [rbp-0x3c]: the frame time */
+        0xc5,0xfa,0x11,0x43,0x08,                 /* vmovss [rbx+8], xmm0: the press credit */
         0xb8,0x01,0x00,0x00,0x00,                 /* mov eax, 1: pressed */
     };
     memcpy(out, body, sizeof(body));

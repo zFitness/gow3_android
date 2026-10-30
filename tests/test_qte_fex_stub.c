@@ -42,8 +42,14 @@ static int qte_original(void) { ++original_called; return 7; }
 
 static uint8_t automatic;  /* the menu's Automatic QTE byte */
 
+/* The prompt's state (rbx) and the update's frame (rbp): the frame time is at rbp-0x3c and the
+ * stub writes it into the state at rbx+8 — the press credit of a mash prompt. */
+static float qte_state[4];
+static char qte_frame[128];
+
 static void call_stub(uint8_t* stub) {
-    __asm__ volatile("call *%0" :: "r"(stub) : "rax", "rcx", "rdx", "memory");
+    __asm__ volatile("push %%rbp\n\tmov %2, %%rbp\n\tmov %1, %%rbx\n\tcall *%0\n\tpop %%rbp"
+                     : : "r"(stub), "r"(qte_state), "r"(qte_frame + 0x40) : "rax", "rcx", "rdx", "rbx", "memory");
 }
 
 int main(void) {
@@ -83,9 +89,13 @@ int main(void) {
     }
 
     /* The automatic path: the stub answers 1 itself and jumps back into the game, without the
-     * game's own function. */
+     * game's own function. It also credits the press with this frame's time (the state's +8) —
+     * without that the prompt's bar never fills and the prompt never completes. */
     automatic = 1;
     qte_fex_resume_rax = 0;
+    memset(qte_state, 0, sizeof(qte_state));
+    const float dt = 1.0f / 120;
+    memcpy(qte_frame + 0x40 - 0x3c, &dt, 4);
     call_stub(stub);
     if (original_called != 1) {
         puts("FAIL: the game's own function ran with Automatic QTE on");
@@ -94,6 +104,10 @@ int main(void) {
     if (qte_fex_resume_rax != 1) {
         printf("FAIL: eax with Automatic QTE is %llu (expected 1)\n",
                (unsigned long long)qte_fex_resume_rax);
+        return 1;
+    }
+    if (qte_state[2] != dt) {
+        printf("FAIL: the press credit is %f (expected %f)\n", (double)qte_state[2], (double)dt);
         return 1;
     }
     puts("PASS: QTE FEX stub");
