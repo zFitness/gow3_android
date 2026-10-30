@@ -8,6 +8,12 @@
 /* The red orb setter (image offset 0x6a9f0 in the reference build) and its three callers that
  * add gains, found by signature in any build; each call must still target the setter. */
 static const SpartanSignature spartanport_orb_setter_site = {"55 48 89 e5 c5 fa 5d 05 ?? ?? ?? ?? c5 fa 11 87 e8 01 00 00", 0};
+/* The setter's prologue (the first bytes of that site): push rbp; mov rbp,rsp; vmovsd xmm0,[rip+…].
+ * Used to confirm a setter found through the call sites' rel32 targets. */
+enum { SPARTAN_ORB_SETTER_PROLOGUE_LENGTH = 8 };
+static const unsigned char spartanport_orb_setter_prologue[SPARTAN_ORB_SETTER_PROLOGUE_LENGTH] = {
+    0x55, 0x48,0x89,0xe5, 0xc5,0xfa,0x5d,0x05
+};
 static const SpartanSignature spartanport_orb_call_sites[3] = {
     {"48 89 df e8 ?? ?? ?? ?? c4 e1 fa 2c 75 f0 bf 04 00 00 00", 3},
     {"c4 e1 fa 2a c8 c5 fa 58 c1 e8 ?? ?? ?? ?? 8b b3 44 01 00 00", 9},

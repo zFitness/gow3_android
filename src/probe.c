@@ -936,23 +936,35 @@ static void install_stat_multipliers_fex(Segment *segments, uint64_t count, uint
  * 游戏原函数 ret，并把 SysV 的对齐补齐。helper 是宿主函数，地址要用 guest 可调用的蹦床。 */
 static void install_orb_multiplier_fex(Segment *segments, uint64_t count, uint64_t size) {
     uint64_t calls[3];
-    const uint64_t setter_at = spartanport_orb_find(image, size, calls);
+    uint64_t setter_at = spartanport_orb_find(image, size, calls);
     if (setter_at == UINT64_MAX) {
-        /* 逐项报出是哪一步没成立：setter 的签名、三个 call 位点的签名、call 是否仍指向 setter。 */
-        const uint64_t setter = spartanport_signature_find(image, size, &spartanport_orb_setter_site);
-        printf("FEX Red orbs: unavailable (setter signature %s)\n",
-               setter == UINT64_MAX ? "not unique" : "unique");
+        /* 上游的找法是"先找 setter 的签名，再找三个指向它的 call"。setter 的签名在这份
+         * eboot 里不唯一时就反过来：三个 call 位点唯一命中时，它们共同指向的那个函数就是
+         * setter（再校验它的序言字节）——call 的 rel32 是链接器写死的，比签名稳。 */
+        uint64_t found[3];
+        unsigned hits = 0;
+        uint64_t target = 0;
         for (unsigned i = 0; i < 3; ++i) {
-            const uint64_t at = spartanport_signature_find(image, size, &spartanport_orb_call_sites[i]);
-            if (at == UINT64_MAX) { printf("FEX Red orbs:   call %u signature not unique\n", i); continue; }
+            found[i] = spartanport_signature_find(image, size, &spartanport_orb_call_sites[i]);
+            if (found[i] == UINT64_MAX || image[found[i]] != 0xe8) continue;
             int32_t relative;
-            memcpy(&relative, image + at + 1, 4);
-            printf("FEX Red orbs:   call %u at 0x%llx opcode 0x%02x target 0x%llx%s\n", i,
-                   (unsigned long long)at, image[at], (unsigned long long)((int64_t)at + 5 + relative),
-                   setter != UINT64_MAX && (int64_t)at + 5 + relative == (int64_t)setter ? " (= setter)" : "");
+            memcpy(&relative, image + found[i] + 1, 4);
+            const uint64_t to = (uint64_t)((int64_t)found[i] + 5 + relative);
+            if (!hits || to == target) { target = to; ++hits; }
+            else hits = 0;
         }
-        printf("FEX Red orbs: multiplier unavailable (code not found in this eboot.bin)\n");
-        return;
+        if (hits == 3 && mapped(segments, count, target, SPARTAN_ORB_SETTER_PROLOGUE_LENGTH) &&
+            !memcmp(image + target, spartanport_orb_setter_prologue, SPARTAN_ORB_SETTER_PROLOGUE_LENGTH)) {
+            setter_at = target;
+            for (unsigned i = 0; i < 3; ++i) calls[i] = found[i];
+            printf("FEX Red orbs: setter taken from the three call targets (0x%llx)\n",
+                   (unsigned long long)setter_at);
+        } else {
+            printf("FEX Red orbs: unavailable (setter signature not unique, call sites %s)\n",
+                   found[0] == UINT64_MAX || found[1] == UINT64_MAX || found[2] == UINT64_MAX
+                       ? "not all unique" : "unique");
+            return;
+        }
     }
     for (unsigned i = 0; i < 3; ++i)
         if (!mapped(segments, count, calls[i], 5)) return;
