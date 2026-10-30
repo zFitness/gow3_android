@@ -227,9 +227,18 @@ static void fault(int sig, siginfo_t *info, void *context) {
     uintptr_t rip = in_guest == GUEST_CPU_IN_GUEST ? (uintptr_t)regs.rip : gport_guest_cpu_host_pc(context);
     char line[512];
     Dl_info where;
-    if (rip - (uintptr_t)image < 0x10000000)
+    if (rip - (uintptr_t)image < 0x10000000) {
         snprintf(line, sizeof(line), "Guest fault (signal %d) at guest offset 0x%lx, address %p\n",
                  sig, (unsigned long)(rip - (uintptr_t)image), info->si_addr);
+        { ssize_t w=write(2, line, strlen(line)); (void)w; }
+        /* 客机寄存器：野指针（哪条基址算错）只有寄存器能说明。 */
+        static const char *const names[16] = {"rax","rcx","rdx","rbx","rsp","rbp","rsi","rdi",
+                                              "r8","r9","r10","r11","r12","r13","r14","r15"};
+        for (unsigned r = 0; r < 16; ++r) {
+            snprintf(line, sizeof(line), "  guest %s = 0x%llx\n", names[r], (unsigned long long)regs.gpr[r]);
+            { ssize_t w=write(2, line, strlen(line)); (void)w; }
+        }
+    }
     else if (dladdr((void *)rip, &where) && where.dli_fname)
         snprintf(line, sizeof(line), "Host fault (signal %d) in %s+0x%lx (%s), address %p\n", sig, where.dli_fname,
                  (unsigned long)(rip - (uintptr_t)where.dli_fbase), where.dli_sname ? where.dli_sname : "?", info->si_addr);
@@ -895,6 +904,7 @@ static void install_actor_watch_fex(Segment *segments, uint64_t count, uint64_t 
                                  (uintptr_t)(image + at + SPARTAN_ACTOR_HOOK_LENGTH));
     protect(stub, page_size, 5);
     gport_guest_cpu_code((uintptr_t)stub, page_size);
+    printf("FEX Health display: stub page at %p\n", (void *)stub);
     if (!trap_redirect_add((uintptr_t)(image + at), (uintptr_t)stub)) {
         printf("FEX Health display: unavailable (JIT hook rejected at 0x%lx)\n", (unsigned long)at);
         return;
@@ -975,6 +985,7 @@ static void install_orb_multiplier_fex(Segment *segments, uint64_t count, uint64
         spartanport_orb_build_stub_fex(stubs + i * 128, helper, setter, (uintptr_t)(image + calls[i] + 5));
     protect(stubs, page_size, 5);
     gport_guest_cpu_code((uintptr_t)stubs, page_size);
+    printf("FEX Red orbs: stub page at %p\n", (void *)stubs);
     for (unsigned i = 0; i < 3; ++i) {
         if (!trap_redirect_add((uintptr_t)(image + calls[i]), (uintptr_t)(stubs + i * 128))) {
             printf("FEX Red orbs: multiplier unavailable (JIT hook rejected at 0x%lx)\n",
