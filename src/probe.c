@@ -938,6 +938,19 @@ static void install_orb_multiplier_fex(Segment *segments, uint64_t count, uint64
     uint64_t calls[3];
     const uint64_t setter_at = spartanport_orb_find(image, size, calls);
     if (setter_at == UINT64_MAX) {
+        /* 逐项报出是哪一步没成立：setter 的签名、三个 call 位点的签名、call 是否仍指向 setter。 */
+        const uint64_t setter = spartanport_signature_find(image, size, &spartanport_orb_setter_site);
+        printf("FEX Red orbs: unavailable (setter signature %s)\n",
+               setter == UINT64_MAX ? "not unique" : "unique");
+        for (unsigned i = 0; i < 3; ++i) {
+            const uint64_t at = spartanport_signature_find(image, size, &spartanport_orb_call_sites[i]);
+            if (at == UINT64_MAX) { printf("FEX Red orbs:   call %u signature not unique\n", i); continue; }
+            int32_t relative;
+            memcpy(&relative, image + at + 1, 4);
+            printf("FEX Red orbs:   call %u at 0x%llx opcode 0x%02x target 0x%llx%s\n", i,
+                   (unsigned long long)at, image[at], (unsigned long long)((int64_t)at + 5 + relative),
+                   setter != UINT64_MAX && (int64_t)at + 5 + relative == (int64_t)setter ? " (= setter)" : "");
+        }
         printf("FEX Red orbs: multiplier unavailable (code not found in this eboot.bin)\n");
         return;
     }
