@@ -101,7 +101,7 @@ class QteProbeWiringTests(unittest.TestCase):
 
     def test_the_fex_path_uses_the_trap_and_its_own_repeat_stub(self):
         # The JIT path cannot patch the image with a jump: the site becomes a trap.
-        self.assertIn('gport_guest_cpu_hook(addr, 2, qte_redirect)', self.probe)
+        self.assertIn('gport_guest_cpu_hook(addr, 2, trap_redirect)', self.probe)
         self.assertIn('gport_guest_cpu_code((uintptr_t)stubs, page_size);', self.probe)
         self.assertIn('spartanport_qte_build_repeat_stub_fex(stub, automatic,', self.probe)
 

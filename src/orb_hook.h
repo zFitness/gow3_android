@@ -22,6 +22,33 @@ static inline void spartanport_orb_build_stub(unsigned char code[26], uintptr_t 
     memcpy(code + 3, &helper, 8);
     memcpy(code + 16, &setter, 8);
 }
+
+/* FEX JIT 路径的变体：位点被换成 2 字节 syscall 陷阱，不再是 call——栈上没有 call 压下的返回
+ * 地址，原生版的 "jmp setter" 会让原函数 ret 弹到垃圾。所以 stub 自己压一个返回地址（游戏原
+ * 函数 ret 时从那里回到 call 之后），并把对齐补齐：陷阱入口 rsp ≡ 0 (mod 16)，SysV 要求
+ * helper 的调用点 rsp ≡ 0、被调方入口 rsp ≡ 8。helper 是宿主函数，地址必须是 guest 可调用的
+ * 蹦床（gport_guest_cpu_host_function）——客机不能直接跳到宿主的原生地址。 */
+static inline unsigned spartanport_orb_build_stub_fex(unsigned char *out, uintptr_t helper, uintptr_t setter,
+                                              uintptr_t resume) {
+    static const unsigned char body[] = {
+        0x57,                            /* push rdi: the receiver survives the helper */
+        0x48,0x83,0xec,0x08,             /* sub rsp, 8: the helper's call wants rsp ≡ 0 */
+        0x48,0xb8, 0,0,0,0,0,0,0,0,     /* movabs rax, helper */
+        0xff,0xd0,                       /* call rax */
+        0x48,0x83,0xc4,0x08,             /* add rsp, 8 */
+        0x5f,                            /* pop rdi */
+        0x48,0x83,0xec,0x08,             /* sub rsp, 8: the setter wants rsp ≡ 8 at its entry */
+        0x48,0xb8, 0,0,0,0,0,0,0,0,     /* movabs rax, resume */
+        0x48,0x89,0x04,0x24,             /* mov [rsp], rax: the return address the setter pops */
+        0x48,0xb8, 0,0,0,0,0,0,0,0,     /* movabs rax, setter */
+        0xff,0xe0,                       /* jmp rax */
+    };
+    memcpy(out, body, sizeof(body));
+    memcpy(out + 7, &helper, 8);
+    memcpy(out + 28, &resume, 8);
+    memcpy(out + 42, &setter, 8);
+    return sizeof(body);
+}
 /* The setter's offset with its three call sites in calls[], or UINT64_MAX when the code is not
  * found or a call does not reach the setter. */
 static inline uint64_t spartanport_orb_find(const unsigned char *image, uint64_t size, uint64_t calls[3]) {

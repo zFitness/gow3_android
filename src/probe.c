@@ -493,16 +493,12 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
 
 /* Damage hook for the enemy health bar (src/actor_hook.h). Always
  * installed when the code matches: it only records values; the overlay decides what to show. */
-static void install_actor_watch(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
-    char path[4096], serial[32] = "", version[32] = "";
-    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
-    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
-    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
-    const uint64_t at = SPARTAN_ACTOR_HOOK_OFFSET;
-    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02") || at > size ||
-        !mapped(segments, count, at, SPARTAN_ACTOR_HOOK_LENGTH) ||
+static void install_actor_watch(Segment *segments, uint64_t count, uint64_t size) {
+    /* 按签名定位（上游做法）：固定偏移只在参考构建上成立，别的构建要靠签名找。 */
+    const uint64_t at = spartanport_signature_find(image, size, &spartanport_actor_site);
+    if (at == UINT64_MAX || !mapped(segments, count, at, SPARTAN_ACTOR_HOOK_LENGTH) ||
         !spartanport_actor_signature_match(image + at, size - at)) {
-        printf("Health display: unavailable (game version or code signature mismatch)\n");
+        printf("Health display: unavailable (code not found in this eboot.bin)\n");
         return;
     }
     unsigned char *stub = allocate(page_size);
@@ -521,29 +517,26 @@ static void install_actor_watch(const char *app0, Segment *segments, uint64_t co
     printf("Health display: damage hook ready (enemy health bar in the menu)\n");
 }
 
-static void install_orb_multiplier(const char *app0, Segment *segments, uint64_t count,
-                                   uint64_t size) {
-    char path[4096], serial[32] = "", version[32] = "";
-    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
-    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
-    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
-    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02") ||
-        !spartanport_orb_signatures_match(image, size)) {
-        printf("Red orbs: multiplier unavailable (game version or gain signatures mismatch)\n");
+static void install_orb_multiplier(Segment *segments, uint64_t count, uint64_t size) {
+    /* setter 与三个 call 位点都由签名定位（上游做法），并校验每个 call 仍指向 setter。 */
+    uint64_t calls[3];
+    const uint64_t setter_at = spartanport_orb_find(image, size, calls);
+    if (setter_at == UINT64_MAX) {
+        printf("Red orbs: multiplier unavailable (code not found in this eboot.bin)\n");
         return;
     }
     for (unsigned i = 0; i < 3; ++i) {
-        if (!mapped(segments, count, spartanport_orb_calls[i], 5)) return;
+        if (!mapped(segments, count, calls[i], 5)) return;
     }
     /* SysV call sites: preserve the receiver across the helper, then tail-call the original
      * setter. Its cap and upgrade notifications remain in the game's own code. */
     unsigned char *stub = allocate(page_size);
-    uintptr_t helper = (uintptr_t)spartanport_orbs_gain, setter = (uintptr_t)(image + 0x6a9f0);
+    uintptr_t helper = (uintptr_t)spartanport_orbs_gain, setter = (uintptr_t)(image + setter_at);
     unsigned char code[26];
     spartanport_orb_build_stub(code, helper, setter);
     int32_t displacements[3];
     for (unsigned i = 0; i < 3; ++i) {
-        int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + spartanport_orb_calls[i] + 5);
+        int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + calls[i] + 5);
         if (delta < INT32_MIN || delta > INT32_MAX) {
             printf("Red orbs: multiplier unavailable (hook outside relative-call range)\n");
             return;
@@ -553,7 +546,7 @@ static void install_orb_multiplier(const char *app0, Segment *segments, uint64_t
     memcpy(stub, code, sizeof(code));
     protect(stub, page_size, 5);
     for (unsigned i = 0; i < 3; ++i)
-        memcpy(image + spartanport_orb_calls[i] + 1, &displacements[i], 4);
+        memcpy(image + calls[i] + 1, &displacements[i], 4);
     spartanport_orbs_status(1);
     printf("Red orbs: live multiplier ready (3 validated gain paths, 0.1x to 100x)\n");
 }
@@ -571,16 +564,13 @@ static int install_jump(uint64_t at, unsigned length, unsigned char *stub) {
 
 /* Damage dealt/taken and green/blue/gold orb multipliers (src/damage_hook.h, src/orb_hook.h):
  * the stubs read the menu's floats directly, so changes apply on the next hit or pickup. */
-static void install_stat_multipliers(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
-    char path[4096], serial[32] = "", version[32] = "";
-    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
-    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
-    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
-    const int game = !strcmp(serial, "CUSA01623") && !strcmp(version, "01.02");
-    const uint64_t damage_at = SPARTAN_DAMAGE_HOOK_OFFSET, pickup_at = SPARTAN_ORB_PICKUP_OFFSET;
-    int damage = game && damage_at < size && mapped(segments, count, damage_at, SPARTAN_DAMAGE_HOOK_LENGTH) &&
+static void install_stat_multipliers(Segment *segments, uint64_t count, uint64_t size) {
+    /* 两个位点都按签名定位（上游做法）：固定偏移只在参考构建上成立。 */
+    const uint64_t damage_at = spartanport_signature_find(image, size, &spartanport_damage_site);
+    const uint64_t pickup_at = spartanport_signature_find(image, size, &spartanport_orb_pickup_site);
+    int damage = damage_at != UINT64_MAX && mapped(segments, count, damage_at, SPARTAN_DAMAGE_HOOK_LENGTH) &&
                  spartanport_damage_signature_match(image + damage_at, size - damage_at);
-    int pickup = game && pickup_at < size && mapped(segments, count, pickup_at, SPARTAN_ORB_PICKUP_LENGTH) &&
+    int pickup = pickup_at != UINT64_MAX && mapped(segments, count, pickup_at, SPARTAN_ORB_PICKUP_LENGTH) &&
                  spartanport_orb_pickup_signature_match(image + pickup_at, size - pickup_at);
     unsigned char *stubs = damage || pickup ? allocate(page_size) : NULL;
     if (damage) {
@@ -722,24 +712,25 @@ static void install_menu_exit(Segment *segments, uint64_t count, uint64_t size, 
 /* JIT 路径：每个 hook 位点变成长 `syscall` 陷阱（gport_guest_cpu_hook），重定向 hook 在表中查
  * 到该位点并把 rip 指向它的 trampoline stub。trampoline 复用 spartanport_cheat_build_stub 的
  * 字节语义（flag 检查 + 替换指令 + 跳回），故运行期经 SpartanSettings::cheats[] 的开关在每个
- * stub 入口依旧生效。 */
-typedef struct { uintptr_t addr, target; } SpartanCheatRedirect;
-static SpartanCheatRedirect spartanport_cheat_redirects[64];
-static unsigned spartanport_cheat_redirect_count;
-static void cheat_redirect(GuestRegs *regs) {
-    for (unsigned i = 0; i < spartanport_cheat_redirect_count; ++i)
-        if (spartanport_cheat_redirects[i].addr == regs->rip) {
-            regs->rip = spartanport_cheat_redirects[i].target;
+ * stub 入口依旧生效。
+ * 金手指、QTE、暂停菜单、伤害/倍率、敌血条、红球倍率共用这一张表：位点 → trampoline。 */
+typedef struct { uintptr_t addr, target; } SpartanTrapRedirect;
+static SpartanTrapRedirect spartanport_trap_redirects[64];
+static unsigned spartanport_trap_redirect_count;
+static void trap_redirect(GuestRegs *regs) {
+    for (unsigned i = 0; i < spartanport_trap_redirect_count; ++i)
+        if (spartanport_trap_redirects[i].addr == regs->rip) {
+            regs->rip = spartanport_trap_redirects[i].target;
             return;
         }
     regs->rip += 2;  /* unknown site: step past the syscall */
 }
-static int cheat_redirect_add(uintptr_t addr, uintptr_t target) {
-    if (spartanport_cheat_redirect_count >= 64) return 0;
-    if (!gport_guest_cpu_hook(addr, 2, cheat_redirect)) return 0;
-    spartanport_cheat_redirects[spartanport_cheat_redirect_count].addr = addr;
-    spartanport_cheat_redirects[spartanport_cheat_redirect_count].target = target;
-    ++spartanport_cheat_redirect_count;
+static int trap_redirect_add(uintptr_t addr, uintptr_t target) {
+    if (spartanport_trap_redirect_count >= 64) return 0;
+    if (!gport_guest_cpu_hook(addr, 2, trap_redirect)) return 0;
+    spartanport_trap_redirects[spartanport_trap_redirect_count].addr = addr;
+    spartanport_trap_redirects[spartanport_trap_redirect_count].target = target;
+    ++spartanport_trap_redirect_count;
     return 1;
 }
 static void install_cheats(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
@@ -772,7 +763,7 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
         for (unsigned i = 0; i < SPARTAN_CHEAT_HOOK_COUNT; ++i) {
             const SpartanCheatHook *hook = &spartanport_cheat_hooks[i];
             if (hook->id != id) continue;
-            if (!cheat_redirect_add((uintptr_t)(image + sites[i].at), (uintptr_t)(stubs + i * 256))) {
+            if (!trap_redirect_add((uintptr_t)(image + sites[i].at), (uintptr_t)(stubs + i * 256))) {
                 printf("FEX Cheats: %s unavailable (JIT hook rejected at 0x%lx)\n",
                        spartanport_cheat_names[id], (unsigned long)sites[i].at);
                 ok = 0;
@@ -795,25 +786,7 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
  * 重定向到 trampoline stub，stub 自己重放被替换的原始字节再跳回（与上面的金手指同款机制）。
  * 宿主侧的开关字节（菜单的 Automatic QTE）与计数跟客机同地址空间（actor slots 先例），所以
  * stub 能直接读写它们，不需要跨边界调用。 */
-typedef struct { uintptr_t addr, target; } SpartanQteRedirect;
-static SpartanQteRedirect spartanport_qte_redirects[16];
-static unsigned spartanport_qte_redirect_count;
-static void qte_redirect(GuestRegs *regs) {
-    for (unsigned i = 0; i < spartanport_qte_redirect_count; ++i)
-        if (spartanport_qte_redirects[i].addr == regs->rip) {
-            regs->rip = spartanport_qte_redirects[i].target;
-            return;
-        }
-    regs->rip += 2;  /* unknown site: step past the syscall */
-}
-static int qte_redirect_add(uintptr_t addr, uintptr_t target) {
-    if (spartanport_qte_redirect_count >= 16) return 0;
-    if (!gport_guest_cpu_hook(addr, 2, qte_redirect)) return 0;
-    spartanport_qte_redirects[spartanport_qte_redirect_count].addr = addr;
-    spartanport_qte_redirects[spartanport_qte_redirect_count].target = target;
-    ++spartanport_qte_redirect_count;
-    return 1;
-}
+
 /* 摇杆提示：提示的 update 里记心跳、旋转判定里作答。两个位点都是函数入口（游戏的 call 已经
  * 把返回地址压栈），所以 stub 重放原始字节或直接 ret 都不必自己管栈。 */
 static int install_qte_hooks_fex(Segment *segments, uint64_t count, uint64_t size) {
@@ -842,7 +815,7 @@ static int install_qte_hooks_fex(Segment *segments, uint64_t count, uint64_t siz
     /* trampoline 在游戏镜像之外，FEX 解码器只翻译 guest CPU 报告为可执行范围的地址。 */
     gport_guest_cpu_code((uintptr_t)stubs, page_size);
     for (unsigned i = 0; i < 2; ++i) {
-        if (!qte_redirect_add((uintptr_t)(image + sites[i]), (uintptr_t)(stubs + i * 128))) {
+        if (!trap_redirect_add((uintptr_t)(image + sites[i]), (uintptr_t)(stubs + i * 128))) {
             printf("FEX Stick prompts: unavailable (JIT hook rejected at 0x%lx)\n", (unsigned long)sites[i]);
             return 0;
         }
@@ -885,7 +858,7 @@ static void install_auto_qte_hooks_fex(Segment *segments, uint64_t count, uint64
     gport_guest_cpu_code((uintptr_t)stubs, page_size);
     for (unsigned i = 0; i < AUTO_QTE_SITES; ++i) {
         if (sites[i] == UINT64_MAX) continue;
-        if (!qte_redirect_add((uintptr_t)(image + sites[i]), (uintptr_t)(stubs + i * 128))) {
+        if (!trap_redirect_add((uintptr_t)(image + sites[i]), (uintptr_t)(stubs + i * 128))) {
             printf("FEX Automatic QTE: %s prompts unavailable (JIT hook rejected)\n", names[i]);
             continue;
         }
@@ -906,25 +879,88 @@ static void install_auto_qte_hooks_fex(Segment *segments, uint64_t count, uint64
  * 钩子装好之后才把打好补丁的 R_UI.WAD 挂上去（否则那行点了没人处理）。 */
 static uintptr_t menu_vtable[4] = {0, 0, 0, 0};
 static const uintptr_t *menu_provider = menu_vtable;
-typedef struct { uintptr_t addr, target; } SpartanMenuRedirect;
-static SpartanMenuRedirect spartanport_menu_redirects[4];
-static unsigned spartanport_menu_redirect_count;
-static void menu_redirect(GuestRegs *regs) {
-    for (unsigned i = 0; i < spartanport_menu_redirect_count; ++i)
-        if (spartanport_menu_redirects[i].addr == regs->rip) {
-            regs->rip = spartanport_menu_redirects[i].target;
+
+/* 敌人血条（src/actor_hook.h）的 JIT 路径：位点是伤害记录函数里的 7 字节（函数的序言），
+ * stub 记下这次命中（敌人的血量/上限）后跳回函数继续。序言位点没有 call 的栈语义，
+ * stub 直接跳回即可。 */
+static void install_actor_watch_fex(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t at = spartanport_signature_find(image, size, &spartanport_actor_site);
+    if (at == UINT64_MAX || !mapped(segments, count, at, SPARTAN_ACTOR_HOOK_LENGTH) ||
+        !spartanport_actor_signature_match(image + at, size - at)) {
+        printf("FEX Health display: unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    unsigned char *stub = allocate(page_size);
+    spartanport_actor_build_stub(stub, spartanport_actor_slots_address(),
+                                 (uintptr_t)(image + at + SPARTAN_ACTOR_HOOK_LENGTH));
+    protect(stub, page_size, 5);
+    gport_guest_cpu_code((uintptr_t)stub, page_size);
+    if (!trap_redirect_add((uintptr_t)(image + at), (uintptr_t)stub)) {
+        printf("FEX Health display: unavailable (JIT hook rejected at 0x%lx)\n", (unsigned long)at);
+        return;
+    }
+    spartanport_actor_status(1);
+    puts("FEX Health display: damage hook ready (enemy health bar in the menu)");
+}
+
+/* 伤害倍率与绿/蓝/金球倍率（src/damage_hook.h、src/orb_hook.h）的 JIT 路径：两个位点都是函数
+ * 序言，stub 读完菜单里的倍数就跳回函数继续（倍率当次生效）。 */
+static void install_stat_multipliers_fex(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t damage_at = spartanport_signature_find(image, size, &spartanport_damage_site);
+    const uint64_t pickup_at = spartanport_signature_find(image, size, &spartanport_orb_pickup_site);
+    int damage = damage_at != UINT64_MAX && mapped(segments, count, damage_at, SPARTAN_DAMAGE_HOOK_LENGTH) &&
+                 spartanport_damage_signature_match(image + damage_at, size - damage_at);
+    int pickup = pickup_at != UINT64_MAX && mapped(segments, count, pickup_at, SPARTAN_ORB_PICKUP_LENGTH) &&
+                 spartanport_orb_pickup_signature_match(image + pickup_at, size - pickup_at);
+    unsigned char *stubs = damage || pickup ? allocate(page_size) : NULL;
+    if (damage)
+        spartanport_damage_build_stub(stubs, spartanport_damage_multiplier(1), spartanport_damage_multiplier(0),
+                               (uintptr_t)(image + damage_at + SPARTAN_DAMAGE_HOOK_LENGTH));
+    if (pickup)
+        spartanport_orb_pickup_build_stub(stubs + 256, spartanport_orb_pickup_multiplier(0),
+                                   spartanport_orb_pickup_multiplier(1), spartanport_orb_pickup_multiplier(2),
+                                   (uintptr_t)(image + pickup_at + SPARTAN_ORB_PICKUP_LENGTH));
+    if (stubs) {
+        protect(stubs, page_size, 5);
+        gport_guest_cpu_code((uintptr_t)stubs, page_size);
+    }
+    if (damage && !trap_redirect_add((uintptr_t)(image + damage_at), (uintptr_t)stubs)) damage = 0;
+    if (pickup && !trap_redirect_add((uintptr_t)(image + pickup_at), (uintptr_t)(stubs + 256))) pickup = 0;
+    spartanport_stat_multipliers_status(damage, pickup);
+    printf("FEX Multipliers: damage %s, green/blue/gold orbs %s\n", damage ? "ready" : "unavailable",
+           pickup ? "ready" : "unavailable");
+}
+
+/* 红球倍率（src/orb_hook.h）的 JIT 路径：三个位点是函数体内的 call（不是序言）——陷阱替掉 call
+ * 的头两个字节后栈上没有返回地址，所以 stub 用 orb_hook.h 里的 FEX 变体：自己压一个返回地址给
+ * 游戏原函数 ret，并把 SysV 的对齐补齐。helper 是宿主函数，地址要用 guest 可调用的蹦床。 */
+static void install_orb_multiplier_fex(Segment *segments, uint64_t count, uint64_t size) {
+    uint64_t calls[3];
+    const uint64_t setter_at = spartanport_orb_find(image, size, calls);
+    if (setter_at == UINT64_MAX) {
+        printf("FEX Red orbs: multiplier unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    for (unsigned i = 0; i < 3; ++i)
+        if (!mapped(segments, count, calls[i], 5)) return;
+    const uintptr_t helper = (uintptr_t)gport_guest_cpu_host_function((void *)spartanport_orbs_gain);
+    const uintptr_t setter = (uintptr_t)(image + setter_at);
+    unsigned char *stubs = allocate(page_size);
+    for (unsigned i = 0; i < 3; ++i)
+        spartanport_orb_build_stub_fex(stubs + i * 128, helper, setter, (uintptr_t)(image + calls[i] + 5));
+    protect(stubs, page_size, 5);
+    gport_guest_cpu_code((uintptr_t)stubs, page_size);
+    for (unsigned i = 0; i < 3; ++i) {
+        if (!trap_redirect_add((uintptr_t)(image + calls[i]), (uintptr_t)(stubs + i * 128))) {
+            printf("FEX Red orbs: multiplier unavailable (JIT hook rejected at 0x%lx)\n",
+                   (unsigned long)calls[i]);
             return;
         }
-    regs->rip += 2;  /* unknown site: step past the syscall */
+    }
+    spartanport_orbs_status(1);
+    puts("FEX Red orbs: live multiplier ready (3 validated gain paths, 0.1x to 100x)");
 }
-static int menu_redirect_add(uintptr_t addr, uintptr_t target) {
-    if (spartanport_menu_redirect_count >= 4) return 0;
-    if (!gport_guest_cpu_hook(addr, 2, menu_redirect)) return 0;
-    spartanport_menu_redirects[spartanport_menu_redirect_count].addr = addr;
-    spartanport_menu_redirects[spartanport_menu_redirect_count].target = target;
-    ++spartanport_menu_redirect_count;
-    return 1;
-}
+
 static void install_menu_exit_fex(Segment *segments, uint64_t count, uint64_t size, const char *wad) {
     const uint64_t at = spartanport_signature_find(image, size, &spartanport_menu_site);
     if (at == UINT64_MAX || !mapped(segments, count, at, SPARTAN_MENU_HOOK_LENGTH) ||
@@ -940,7 +976,7 @@ static void install_menu_exit_fex(Segment *segments, uint64_t count, uint64_t si
     protect(stub, page_size, 5);
     /* trampoline 在游戏镜像之外：注册为 guest 代码，JIT 才会翻译它。 */
     gport_guest_cpu_code((uintptr_t)stub, page_size);
-    if (!menu_redirect_add((uintptr_t)(image + at), (uintptr_t)stub)) {
+    if (!trap_redirect_add((uintptr_t)(image + at), (uintptr_t)stub)) {
         printf("FEX Pause menu: Exit to Desktop unavailable (JIT hook rejected at 0x%lx)\n", (unsigned long)at);
         return;
     }
@@ -1283,10 +1319,10 @@ if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
      * only meaningful when the game's code runs on the host CPU. Under the JIT the image is
      * translated, so live code patching needs the JIT's own hook path (gport_guest_cpu_hook, not yet
      * wired here): the game runs without cheats, the health bar and the orb multipliers. */
-    if (gpu_enabled) install_orb_multiplier(app0, segments, ns, size);
+    if (gpu_enabled) install_orb_multiplier(segments, ns, size);
     if (gpu_enabled) install_cheats(app0, segments, ns, size);
-    if (gpu_enabled) install_actor_watch(app0, segments, ns, size);
-    if (gpu_enabled) install_stat_multipliers(app0, segments, ns, size);
+    if (gpu_enabled) install_actor_watch(segments, ns, size);
+    if (gpu_enabled) install_stat_multipliers(segments, ns, size);
     if (gpu_enabled) install_auto_qte_hooks(segments, ns, size, install_qte_hooks(segments, ns, size));
     if (gpu_enabled && pause_menu_wad && app0) install_menu_exit(segments, ns, size, pause_menu_wad);
 #else
@@ -1296,6 +1332,10 @@ if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     else printf("FEX Cheats: OFF - the GPU library was not initialized (no cheats installed)\n");
     /* QTE 提示与 Automatic QTE 走同一条陷阱路径（各自的位点与 trampoline）。 */
     if (gpu_enabled) install_auto_qte_hooks_fex(segments, ns, size, install_qte_hooks_fex(segments, ns, size));
+    /* 敌血条、伤害/球倍率、红球倍率：位点走陷阱路径（stub 读宿主侧的菜单设置与计数）。 */
+    if (gpu_enabled) install_actor_watch_fex(segments, ns, size);
+    if (gpu_enabled) install_stat_multipliers_fex(segments, ns, size);
+    if (gpu_enabled) install_orb_multiplier_fex(segments, ns, size);
     /* 暂停菜单的 Exit to Desktop：位点走陷阱路径，WAD 由安装器在钩子装好后挂上。 */
     if (gpu_enabled && pause_menu_wad && app0) install_menu_exit_fex(segments, ns, size, pause_menu_wad);
 #endif

@@ -77,7 +77,7 @@ class MenuProbeWiringTests(unittest.TestCase):
         # provider vtable need the host-function trampoline.
         self.assertIn('gport_guest_cpu_host_function((void *)menu_setting)', self.probe)
         self.assertIn('gport_guest_cpu_host_function((void *)menu_quit)', self.probe)
-        self.assertIn('gport_guest_cpu_hook(addr, 2, menu_redirect)', self.probe)
+        self.assertIn('gport_guest_cpu_hook(addr, 2, trap_redirect)', self.probe)
         self.assertIn('gport_guest_cpu_code((uintptr_t)stub, page_size);', self.probe)
 
     def test_the_wad_is_mounted_after_the_hook_is_in(self):
@@ -85,7 +85,7 @@ class MenuProbeWiringTests(unittest.TestCase):
         fex = self.probe.index('static void install_menu_exit_fex(Segment')
         for start in (native, fex):
             body = self.probe[start:start + 2000]
-            self.assertLess(body.index('menu_redirect_add') if 'menu_redirect_add' in body
+            self.assertLess(body.index('trap_redirect_add') if 'trap_redirect_add' in body
                             else body.index('install_jump'),
                             body.index('runtime_file_mount'))
 
