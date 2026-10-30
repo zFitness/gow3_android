@@ -47,8 +47,10 @@ if WINDOWS:
 FROZEN = getattr(sys, 'frozen', False)
 PORT_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PORT_DIR / 'scripts'))
+import build_flags  # noqa: E402  (scripts/)
 import graphics_options  # noqa: E402  (scripts/)
 import legacy  # noqa: E402  (scripts/)
+import nixport_host  # noqa: E402  (scripts/)
 import save_backup  # noqa: E402  (scripts/)
 import steam_shortcut  # noqa: E402  (scripts/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
@@ -287,6 +289,16 @@ FONT_LOADED = False  # set by main() for the window; the command-line roles neve
 WARN = '  ⚠'  # marks a risky choice; the text before it is translated as usual
 
 
+# gport: 安卓增量——设备会话的判定，与客机侧 gpu/shim/window.cpp 的 PresentBridgeActive()
+# 用同一个变量（FEXDROID_PRESENT）：该变量存在时客机游戏窗口铺满整屏，启动器窗口跟着
+# 铺满，两个窗口同几何。上游从不读这个变量，桌面端不受影响。
+def present_bridge_active():
+    """True in the device session: the app presents the guest's frames over FEXDROID_PRESENT, and the
+    guest's own window then covers the whole screen (gpu/shim/window.cpp, PresentBridgeActive()).
+    The launcher window follows the same predicate, so both windows share one geometry."""
+    return bool(os.environ.get('FEXDROID_PRESENT'))
+
+
 def monitor_under_pointer(root):
     """(x, y, width, height) of the monitor holding the mouse pointer, from xrandr; zeros if unknown."""
     try:
@@ -477,10 +489,18 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
                 'live_resolution': 'auto', 'display_mode': 'windowed', 'vsync': '1', 'fps_limit': '0',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
-                'render_resolution': graphics_options.DEFAULTS['render_resolution'], 'engine_fps': '120',
+                'render_resolution': graphics_options.DEFAULTS['render_resolution'],
+                'engine_fps': graphics_options.DEFAULTS['engine_fps'],
                 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
                 'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
                 'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100'}
+# gport: 安卓增量——设备线（ARM 构建）的缺省集与桌面不同：移动端 GPU 预算有限，关升采样与
+# 物体运动抖动、限帧 60、渲染 720p、引擎帧率 60。缺省值的唯一来源是 graphics_options 的
+# DEVICE_DEFAULTS（客机侧 gpu/shim/spartanport_settings.h 与之同源），桌面构建两个开关都关，
+# 下面的值与原来一致。
+if build_flags.ARM:
+    INI_DEFAULTS.update({key: value for key, value in graphics_options.DEVICE_DEFAULTS.items()
+                         if key in INI_DEFAULTS})
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('100', ('100',)), ('120', ('120',)), ('144', ('144',)), ('180', ('180',)), ('240', ('240',)), ('0', ('Unlimited',))]
@@ -1440,7 +1460,16 @@ class Launcher:
     def size_window(self):
         left, top, width, height = self.monitor
         window_width, window_height = self.px(1120), self.px(740)
-        if width:
+        if present_bridge_active():
+            # gport: 安卓增量（设备会话）——与客机游戏窗口同几何。
+            # 设备会话里没有窗口管理器，X server 把没有坐标的窗口放在 (0,0)，尺寸又只有屏幕的 90%，
+            # 界面因此偏在左上角（"启动器靠左"）。客机那边 gpu/shim/window.cpp 以 FEXDROID_PRESENT
+            # 为判据让游戏窗口铺满整屏，这里用同一个判据让启动器也铺满整屏：PLAY 前后画面不缩放跳动。
+            # 判据放在最前面，设备会话的优先级高于读到的显示器信息（设备上通常没有 xrandr）。
+            # 上游同步时重放这一段即可（见 tools/check_migration.py 的 PARTIAL 与 RUNTIME.md 的增量登记）。
+            window_width, window_height = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+            self.root.geometry(f'{window_width}x{window_height}+0+0')
+        elif width:
             window_width, window_height = min(window_width, int(width * 0.9)), min(window_height, int(height * 0.9))
             self.root.geometry(f'{window_width}x{window_height}{left + (width - window_width) // 2:+d}'
                                f'{top + (height - window_height) // 2:+d}')
@@ -1697,7 +1726,11 @@ class Launcher:
         ttk.Entry(holder, textvariable=var, width=46).pack(side='left')
 
         def browse():
-            chosen = self.filedialog.askdirectory(title=prompt, initialdir=var.get() or str(PORT_DIR))
+            # gport: 安卓增量——Nixport 构建用宿主的选择屏（触屏原生），总线不在时回退 Tk 对话框。
+            if build_flags.NIXPORT and nixport_host.available():
+                chosen = nixport_host.pick_directory(var.get())
+            else:
+                chosen = self.filedialog.askdirectory(title=prompt, initialdir=var.get() or str(PORT_DIR))
             if chosen:
                 var.set(str(Path(chosen)))
         ttk.Button(holder, text=_('Browse…', 'Обзор…'), command=browse).pack(side='left', padx=self.px((6, 0)))
@@ -2311,7 +2344,7 @@ class Launcher:
 
     def refresh_game_patches(self):
         import xml.etree.ElementTree as ET
-        from patches import ALWAYS_ON, EXCLUSIVE_PREFIX
+        from patches import ALWAYS_ON, EXCLUSIVE_PREFIX, device_default_patches
         tk, f = self.tk, self.game_patch_frame
         self.store_game_patches()
         for widget in f.winfo_children():
@@ -2328,6 +2361,10 @@ class Launcher:
         chosen = self.app.get('game_patches', {}).get(title_id)
         on = set(chosen) if chosen is not None else {m.get('Name') for m in metas
                                                          if m.get('isEnabled', 'false').lower() == 'true'}
+        if chosen is None:
+            # gport: 安卓增量——设备线（ARM 构建）默认勾上去特效补丁（移动 GPU 预算有限）。
+            # 用户保存过选择后以保存的为准，不再补默认。
+            on |= device_default_patches(metas)
         self.note(f, _('{} · version {} · {}. Resolution and frame rate patches follow Performance.',
                        '{} · версия {} · {}.').format(title_id, version, xml.name), top=0)
         for meta in metas:

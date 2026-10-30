@@ -508,7 +508,13 @@ void PerformanceTab() {
             "1360 × 768 · 16:9",
             "1280 × 960 · 4:3", "1440 × 1080 · 4:3 (beta)", "1920 × 1440 · 4:3",
             "2048 × 1536 · 4:3 (beta)", "2560 × 1920 · 4:3 (beta)", "5120 × 2160 · 21:9",
-            "8K · 7680 × 4320 · 16:9 (beta)"};
+            "8K · 7680 × 4320 · 16:9 (beta)",
+            // gport: 安卓增量——设备线的两个分辨率（与 spartanport_graphics.h 的名字表同序）：
+            // 540p 与 1080p 是安卓侧补丁数据集带来的，标签与启动器一致（resolution_label）。
+#ifdef SPARTAN_ARM
+            "540p · 960 × 540 · 16:9 (beta)", "1080p · 1920 × 1080 · 16:9 (beta)",
+#endif
+            };
         static_assert(std::size(builtin_labels) == G::Resolutions.size());
         const std::vector<std::string> resolution_names = G::ResolutionNames();
         std::vector<const char*> resolution_labels;
@@ -1833,7 +1839,12 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     io.DisplaySize = ImVec2(float(extent.width), float(extent.height));
     io.DeltaTime = ms > 0.0f && ms < 1000.0f ? ms / 1000.0f : 1.0f / 60.0f;
     // UI scale follows the display height (1080p = 1).
-    const float scale = std::max(float(extent.height) / 1080.0f, 0.75f);
+    // gport: 安卓增量——缩放下限从 0.75 提到 1.0（低分辨率档位不再缩小）。
+    // 设备上虚拟屏高度常见 720，height/1080 只有 0.67，被 0.75 兜住后菜单会按 0.75 缩小：
+    // 18px 字号落到 13.5px，菜单正文偏小、点选目标也偏小。下限取 1.0 后低档位保持基准字号
+    // （菜单尺寸仍由 WorkSize 的 0.95/0.9 上限兜住，不会超出屏幕）。
+    // 上游同步时重放这一行即可（见 tools/check_migration.py 的 PARTIAL 与 RUNTIME.md 的增量登记）。
+    const float scale = std::max(float(extent.height) / 1080.0f, 1.0f);
     if (std::abs(scale - base_scale) > 0.01f) {
         ImGuiStyle& style = ImGui::GetStyle();
         style.ScaleAllSizes(scale / base_scale);

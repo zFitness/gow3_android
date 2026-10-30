@@ -276,10 +276,20 @@ class GraphicsOptionsTest(unittest.TestCase):
 
 class WindowSizeTest(unittest.TestCase):
     def test_the_game_knows_the_launcher_sizes(self):
-        """gpu/shim/spartanport_graphics.h ResolutionSizes, which sizes the window, matches SIZES."""
+        """gpu/shim/spartanport_graphics.h ResolutionSizes, which sizes the window, matches SIZES.
+        The device line's two extra sizes are in the header for both builds (the desktop one just
+        does not list them), so the header carries SIZES plus the device ones."""
         header = (paths.ROOT / 'gpu' / 'shim' / 'spartanport_graphics.h').read_text(encoding='utf-8')
         found = {name: (int(w), int(h)) for name, w, h in re.findall(r'\{"(\w+)", \{(\d+), (\d+)\}\}', header)}
-        self.assertEqual(found, g.SIZES)
+        self.assertEqual(found, {**g.SIZES, **g.DEVICE_SIZES})
+
+    def test_the_game_knows_the_same_resolutions(self):
+        """The names in the header (the ini's render_resolution round-trip) match the launcher's."""
+        header = (paths.ROOT / 'gpu' / 'shim' / 'spartanport_graphics.h').read_text(encoding='utf-8')
+        block = re.search(r'Resolutions = \{(.*?)\};', header, re.S).group(1)
+        found = re.findall(r'"([^"]+)"', block)
+        self.assertEqual(found, list(g.RESOLUTIONS) + [n for n in g.DEVICE_RESOLUTIONS
+                                                       if n not in g.RESOLUTIONS])
 
 
 

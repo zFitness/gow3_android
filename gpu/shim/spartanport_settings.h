@@ -27,14 +27,40 @@ inline constexpr int OutputHeights[] = {720, 1080, 1440, 2160};
 inline constexpr int OutputCount = 4;
 inline constexpr int OutputDefault = 1; ///< 1920x1080, the game's own size
 
+// Build target defaults (the CMake options SPARTAN_ARM and SPARTAN_NIXPORT, both off by default).
+// gport: 安卓增量——设备线的缺省值与桌面不同，两处必须同时改：
+//   移动端 GPU 预算有限，桌面缺省（FSR 3 升采样、物体运动抖动、不限帧、原生分辨率、120 帧）
+//   在手机上跑不动：升采样与物体运动由 run.py 强制关掉，渲染分辨率降到 720p，帧率压到 60。
+//   Nixport 上游戏画面被缩放到手机屏幕，屏幕里的菜单按基准尺寸画就太小，覆盖层缺省放大到 150%。
+//   启动器把同一组缺省值写进 spartanport.ini（scripts/graphics_options.py 的 DEVICE_DEFAULTS），
+//   文件与本头文件一致，改一处要同时改另一处。
+#ifdef SPARTAN_ARM
+#define SPARTAN_DEVICE_UPSCALER UpscalerOff
+#define SPARTAN_DEVICE_OBJECT_MOTION false
+#define SPARTAN_DEVICE_FPS_LIMIT 60
+#define SPARTAN_DEVICE_RENDER_RESOLUTION 2 ///< 720p, the index into the resolution names
+#define SPARTAN_DEVICE_ENGINE_FPS 60
+#else
+#define SPARTAN_DEVICE_UPSCALER UpscalerFsr3
+#define SPARTAN_DEVICE_OBJECT_MOTION true
+#define SPARTAN_DEVICE_FPS_LIMIT 0
+#define SPARTAN_DEVICE_RENDER_RESOLUTION 0
+#define SPARTAN_DEVICE_ENGINE_FPS 120
+#endif
+#ifdef SPARTAN_NIXPORT
+#define SPARTAN_DEVICE_OVERLAY_SCALE 150
+#else
+#define SPARTAN_DEVICE_OVERLAY_SCALE 100
+#endif
+
 struct Values {
-    std::atomic<int> upscaler{UpscalerFsr3};
+    std::atomic<int> upscaler{SPARTAN_DEVICE_UPSCALER};
     std::atomic<int> preset{NativeAA};
     std::atomic<bool> sharpen{true};
     std::atomic<float> sharpness{0.3f};
     std::atomic<bool> jitter{true};
     std::atomic<bool> reactive{false};
-    std::atomic<bool> object_motion{true};
+    std::atomic<bool> object_motion{SPARTAN_DEVICE_OBJECT_MOTION};
     std::atomic<float> reactive_scale{1.0f};
     std::atomic<float> reactive_threshold{0.2f};
     std::atomic<float> reactive_max{0.9f};
@@ -44,7 +70,7 @@ struct Values {
     /// in percent, corner (0 top left, 1 top right, 2 bottom left, 3 bottom right), layout
     /// (0 one line, 1 one item per line). menu_tab: the menu's last tab.
     std::atomic<unsigned> overlay_items{7};
-    std::atomic<int> overlay_scale{100}, overlay_corner{1}, overlay_opacity{50}, overlay_layout{0};
+    std::atomic<int> overlay_scale{SPARTAN_DEVICE_OVERLAY_SCALE}, overlay_corner{1}, overlay_opacity{50}, overlay_layout{0};
     std::atomic<int> menu_tab{0};
     std::atomic<float> red_orb_multiplier{1.0f};
     std::atomic<bool> red_orbs_supported{false};
@@ -64,7 +90,7 @@ struct Values {
     // Graphics (spartanport_graphics.h). Live: applied on the next frame.
     std::atomic<int> display_mode{0};
     std::atomic<bool> vsync{true};
-    std::atomic<int> fps_limit{0};
+    std::atomic<int> fps_limit{SPARTAN_DEVICE_FPS_LIMIT};
     std::atomic<bool> async_shaders{true};
     std::atomic<bool> fsr1{false};
     std::atomic<bool> rcas{true};
@@ -86,8 +112,8 @@ struct Values {
     /// L2 aim sensitivity in percent, 10 to 200: lower needs more mouse for the same stick. Live.
     std::atomic<int> mouse_aim_sensitivity{100};
     // Startup: run.py turns them into patches and environment variables; "Apply and restart".
-    std::atomic<int> render_resolution{0};
-    std::atomic<int> engine_fps{120};
+    std::atomic<int> render_resolution{SPARTAN_DEVICE_RENDER_RESOLUTION};
+    std::atomic<int> engine_fps{SPARTAN_DEVICE_ENGINE_FPS};
     std::atomic<bool> deferred_readback{true};
     std::atomic<bool> stale_readback{true};
     /// SpartanGraphics::Anisotropies; the samplers read startup_anisotropy.
@@ -96,10 +122,10 @@ struct Values {
     /// Set before an "Apply and restart"; cleared once the new launch shows the game. run.py
     /// restores the previous startup options when a launch never cleared it.
     std::atomic<bool> restart_unconfirmed{false};
-    int startup_render_resolution = 0;
+    int startup_render_resolution = SPARTAN_DEVICE_RENDER_RESOLUTION;
     /// The engine rate this launch really runs at (run.py's SPARTAN_ENGINE_FPS): 60 when the frame
     /// rate patch does not apply to this game build.
-    std::atomic<int> applied_engine_fps{120};
+    std::atomic<int> applied_engine_fps{SPARTAN_DEVICE_ENGINE_FPS};
     /// The game's maximum frame rate, read every frame (src/probe.c finds it): as a float and
     /// rounded. Null when this eboot.bin's code does not match. engine_fps is written there live.
     std::atomic<float*> engine_fps_global{nullptr};
@@ -122,8 +148,8 @@ struct Values {
 
     /// Startup settings for the explicit SPARTAN_RENDER_RES compatibility patch only.
     int startup_preset = NativeAA;
-    int startup_upscaler = UpscalerFsr3;
-    bool startup_object_motion = true;
+    int startup_upscaler = SPARTAN_DEVICE_UPSCALER;
+    bool startup_object_motion = SPARTAN_DEVICE_OBJECT_MOTION;
     int startup_output_res = OutputDefault;
     int startup_live_resolution = 0;
 };

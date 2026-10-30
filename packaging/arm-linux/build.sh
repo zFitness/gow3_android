@@ -77,6 +77,14 @@ step=0; _t0=0
 begin() { step=$((step + 1)); _t0=$(date +%s); printf '\n==> [%d/5] %s\n' "$step" "$*"; }
 end_stage() { printf '    %s (%dm%02ds)\n' "$*" $(( ($(date +%s) - _t0) / 60 )) $(( ($(date +%s) - _t0) % 60 )); }
 
+# 目标平台开关（与 gpu/CMakeLists.txt 的 option 同名）：SPARTAN_ARM = 目标是 ARM（ARM Linux 与
+# 安卓共用这一份二进制，GPU 代码按它分支）；SPARTAN_NIXPORT = 目标是 nixport 平台（宿主服务
+# 总线、移动端样式）。默认关，只有本构建线显式打开。
+# 同一组值也写进程序树的 config/gport-build-flags.json（Python 侧 scripts/build_flags.py 读它），
+# C++ 与 Python 两侧的开关同源，不会漂移。
+spartan_arm=ON
+spartan_nixport=ON
+
 # ---- 1/5 FEXCore + libgportcpu.so（guest CPU）-----------------------------------------
 begin "FEXCore + libgportcpu.so"
 if [[ ! -f $out/fex/build.ninja ]]; then
@@ -90,9 +98,11 @@ end_stage "libgportcpu.so"
 
 # ---- 2/5 libgportgpu.so（shadPS4 video core）------------------------------------------
 begin "libgportgpu.so"
-if [[ ! -f $out/gpu/build.ninja ]]; then
+# 目标平台开关变了要重新 configure：CMake 的 option 缓存在 build.ninja 里，不重跑不会生效。
+if [[ ! -f $out/gpu/build.ninja ]] || ! grep -q "^SPARTAN_ARM:BOOL=$spartan_arm$" "$out/gpu/CMakeCache.txt" 2>/dev/null; then
     cmake -S gpu -B "$out/gpu" -G Ninja -DCMAKE_TOOLCHAIN_FILE="$tc" \
         -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSPARTAN_PGO=off -DSPARTAN_LTO=OFF \
+        -DSPARTAN_ARM="$spartan_arm" -DSPARTAN_NIXPORT="$spartan_nixport" \
         -DSPARTAN_ARM64_HEADER_PREFIX="$headers" \
         -Dtsl-robin-map_DIR="$headers/share/cmake/tsl-robin-map" \
         -DVulkanMemoryAllocator_DIR="$headers/share/cmake/VulkanMemoryAllocator" \
@@ -179,6 +189,17 @@ find "$appdir/launcher" -name __pycache__ -prune -exec rm -r {} + 2>/dev/null ||
 for name in gport-fex-compatible.json gport-gamecontrollerdb.txt gport-packages.txt; do
     [[ -f packaging/arm-linux/config/$name ]] && install -m644 "packaging/arm-linux/config/$name" "$appdir/config/"
 done
+# 构建期开关的 Python 侧标记：与上面传给 CMake 的同一组值（scripts/build_flags.py 读它）。
+# 桌面构建不写这个文件，两个开关都是关的。
+python3 - "$appdir/config/gport-build-flags.json" "$spartan_arm" "$spartan_nixport" <<'PY'
+import json
+import sys
+
+path, arm, nixport = sys.argv[1:4]
+with open(path, 'w', encoding='utf-8') as out:
+    json.dump({'arm': arm == 'ON', 'nixport': nixport == 'ON'}, out, indent=2)
+    out.write('\n')
+PY
 # AppImage 三件套：.DirIcon（取启动器图标）+ .desktop
 cp -f "$appdir/launcher/spartanport.png" "$appdir/.DirIcon"
 install -m644 packaging/arm-linux/spartanport.desktop "$appdir/spartanport.desktop"

@@ -27,12 +27,25 @@ inline constexpr std::array<int, 8> FpsLimits = {30, 60, 100, 120, 144, 180, 240
 /// Game patch suffixes ("Resolution Patch - <name>"); "native" is no resolution patch.
 /// The ones after 900p are the Ultrawide mod's sizes (#202) and the 16:10 and 4:3 ones, built in as beta
 /// (scripts/graphics_options.py).
-inline constexpr std::array<std::string_view, 23> Resolutions = {
+// gport: 安卓增量——设备线额外的两个分辨率（540p / 1080p）：安卓侧的补丁数据集带来的
+// （patches/*.xml 的 "Resolution Patch - 540p" / "- 1080p"），上游既没有这两个名字也没有对应补丁。
+// 客机必须认识这两个名字：否则 ini 里的 render_resolution=540p 解析成 native，游戏内菜单与
+// Save() 写回的也是 native，设置在一次菜单操作后丢失。桌面构建不带它们，行为与上游逐字一致。
+#ifdef SPARTAN_ARM
+#define SPARTAN_EXTRA_RESOLUTION_COUNT 2
+#else
+#define SPARTAN_EXTRA_RESOLUTION_COUNT 0
+#endif
+inline constexpr std::array<std::string_view, 23 + SPARTAN_EXTRA_RESOLUTION_COUNT> Resolutions = {
     "native", "480p", "720p", "900p", "1440p", "1800p", "4K",
     "2560x1080", "3440x1440", "3840x1600", "5120x1440", "1920x1200", "2560x1600", "1280x800",
     "1440x900", "1360x768",
     "1280x960", "1440x1080", "1920x1440", "2048x1536", "2560x1920",
-    "5120x2160", "8K"};
+    "5120x2160", "8K",
+#ifdef SPARTAN_ARM
+    "540p", "1080p",
+#endif
+    };
 /// The resolutions to choose from: the built-in ones, then those of the enabled mods' patch files
 /// (SPARTAN_EXTRA_RESOLUTIONS, ";"-separated sizes such as "3440x1440"; run.py sets it at every start).
 inline std::vector<std::string> ResolutionNames() {
@@ -48,10 +61,16 @@ inline std::vector<std::string> ResolutionNames() {
 }
 /// The size in pixels of a resolution name: the built-in ones (as scripts/graphics_options.py SIZES)
 /// or a mod's "<width>x<height>"; anything else is native.
-inline constexpr std::array<std::pair<std::string_view, std::pair<int, int>>, 8> ResolutionSizes = {{
+// gport: 安卓增量——设备线的 540p（960×540）与 1080p（1920×1080）也进尺寸表：名字表
+// (Resolutions) 认了它们，尺寸表不认的话窗口尺寸与"渲染分辨率放不下"的提示都会退回原生。
+inline constexpr std::array<std::pair<std::string_view, std::pair<int, int>>, 8 + SPARTAN_EXTRA_RESOLUTION_COUNT> ResolutionSizes = {{
     {"native", {1920, 1080}}, {"480p", {854, 480}}, {"720p", {1280, 720}},
     {"900p", {1600, 900}}, {"1440p", {2560, 1440}}, {"1800p", {3200, 1800}}, {"4K", {3840, 2160}},
-    {"8K", {7680, 4320}}}};
+    {"8K", {7680, 4320}},
+#ifdef SPARTAN_ARM
+    {"540p", {960, 540}}, {"1080p", {1920, 1080}},
+#endif
+    }};
 inline std::pair<int, int> ResolutionSize(std::string_view name) {
     for (const auto& [key, size] : ResolutionSizes) {
         if (key == name) return size;

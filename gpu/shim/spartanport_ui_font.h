@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include "imgui.h"
@@ -27,6 +28,22 @@ inline bool UsableFont(const std::filesystem::path& path) {
             std::string_view(signature, 4) == "OTTO" || std::string_view(signature, 4) == "ttcf");
 }
 
+// Nixport: the host ships a CJK font into every tree (the guest-fonts spec): the arm64 rootfs
+// gets it under usr/share/fonts/truetype/fexdroid/, kept apart from the tree's own fonts.
+// A native session's / is Android's, so the font is only reachable through FXD_ROOT; a chrooted
+// tree sees the same relative path directly. The font is Noto Sans CJK SC (OFL), a CFF/OpenType
+// file — stb_truetype rasterizes CFF since 1.24.
+inline ChineseFontFile FindNixportChineseFont() {
+    const std::filesystem::path relative = "usr/share/fonts/truetype/fexdroid/NotoSansCJKsc-Regular.otf";
+    if (const char* root = std::getenv("FXD_ROOT"); root && root[0]) {
+        const std::filesystem::path path = std::filesystem::path(root) / relative;
+        if (UsableFont(path)) return {path, 0};
+    }
+    const std::filesystem::path path = std::filesystem::path("/") / relative;
+    if (UsableFont(path)) return {path, 0};
+    return {};
+}
+
 // Read installed fonts only. No Microsoft or third-party font is bundled/copied by the port.
 inline ChineseFontFile FindChineseFont() {
 #ifdef _WIN32
@@ -39,6 +56,7 @@ inline ChineseFontFile FindChineseFont() {
         }
     }
 #else
+    if (ChineseFontFile nixport = FindNixportChineseFont(); !nixport.path.empty()) return nixport;
     for (const char* name : {
              "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
              "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",

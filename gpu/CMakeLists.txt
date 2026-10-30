@@ -40,6 +40,22 @@ elseif (SPARTAN_PGO STREQUAL "use")
                         -fprofile-correction -Wno-missing-profile -Wno-coverage-mismatch)
 endif()
 
+# spartanport: build target flags, both off by default. The x86_64 desktop build leaves them off,
+# so its behavior is the desktop one; only the Nixport port build line (packaging/arm-linux) turns
+# them on.
+# SPARTAN_ARM: the binary targets ARM. ARM Linux and Android share one build, so GPU code that
+# differs on ARM branches on this instead of on the host.
+# SPARTAN_NIXPORT: the binary targets the Nixport platform: the host service bus (toasts, dialogs,
+# the file picker) and the mobile styles.
+option(SPARTAN_ARM "Target is ARM (ARM Linux and Android share one binary)" OFF)
+option(SPARTAN_NIXPORT "Target is the Nixport platform (host service bus, mobile styles)" OFF)
+if (SPARTAN_ARM)
+    add_compile_definitions(SPARTAN_ARM)
+endif()
+if (SPARTAN_NIXPORT)
+    add_compile_definitions(SPARTAN_NIXPORT)
+endif()
+
 find_package(Vulkan REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Boost REQUIRED)
@@ -341,9 +357,8 @@ add_executable(graphics-settings-test EXCLUDE_FROM_ALL ../tests/test_graphics_se
     shim/spartanport_settings.cpp)
 target_include_directories(graphics-settings-test PRIVATE shim)
 target_compile_options(graphics-settings-test PRIVATE -UNDEBUG)
-add_executable(pad-input-test EXCLUDE_FROM_ALL ../tests/test_pad_input.cpp)
-target_include_directories(pad-input-test PRIVATE shim)
-target_compile_options(pad-input-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+# gport: 安卓增量——pad 文件桥退役（SDL 直接识别手柄），tests/test_pad_input.cpp 不迁入，
+# 它的测试目标一并去掉（否则 cmake configure 找不到源文件，整个 GPU 库配不出来）。
 add_executable(actor-hook-test EXCLUDE_FROM_ALL ../tests/test_actor_hook.cpp)
 target_include_directories(actor-hook-test PRIVATE shim)
 target_compile_options(actor-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)

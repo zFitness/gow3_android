@@ -6,6 +6,7 @@
 
   ALIGNED   归一化后与参考仓一致（D 类已对齐 / 重放层已完成）
   REPLAY    重放层清单内且尚未一致（B/E 类待重放——迁移工作队列）
+  PARTIAL   有意只重放部分增量 / 叠加设备线增量，与参考仓永久不同（重放锚点见注释）
   UPSTREAM  C 类（安卓侧旧变体，runtime 取上游版本，永久 DELTA 属预期）
   SKIP      排除清单（APK/deploy/CI/驱动构建/音频等，不迁入）
   ADD       新增层待迁（参考仓独有、不在排除清单——cpu/、vk_predication 等）
@@ -146,10 +147,23 @@ SKIP_GLOBS = [
 #   runtime_pad.c / runtime_services.c / spartanport_overlay.cpp/.h / spartanportgpu.h
 # 部分重放（有意只重放部分增量，与参考仓永久不同）：
 #   spartanportgpu.cpp   只重放修复标记（pad_publish 随文件桥退役移除；text_input 两侧一致）
+# 设备线增量（上游版本 + 一处安卓增量，与上游/参考仓都永久不同；同步上游时照
+# RUNTIME.md 的"设备线增量登记"重放，代码里带 # gport: / // gport: 标记）：
+#   launcher/spartanport_launcher_win.py  设备会话里启动器铺满屏幕（判据 FEXDROID_PRESENT）
+#   gpu/shim/spartanport_overlay.cpp       覆盖层缩放下限 0.75 → 1.0（低分辨率档位不缩小）
+#   gpu/CMakeLists.txt                     目标平台开关 SPARTAN_ARM / SPARTAN_NIXPORT
+#   gpu/shim/spartanport_settings.h        设备线缺省值（ARM）与覆盖层字号（NIXPORT）
 PARTIAL = {
     'gpu/shim/spartanportgpu.cpp',   # 仅修复标记（pad_publish 随文件桥退役移除）
     'gpu/shim/window.cpp',           # 仅直送桥集成（pad 门控回退上游，SDL 直接识别手柄）
     'gpu/spartanportgpu.h',          # 仅 pad_publish 声明移除
+    # 设备线增量（详见 RUNTIME.md 的"设备线增量登记"）：
+    'launcher/spartanport_launcher_win.py',  # size_window()：设备会话铺满屏幕 +0+0
+    'gpu/shim/spartanport_overlay.cpp',      # Render()：UI 缩放下限 0.75 → 1.0
+    'gpu/CMakeLists.txt',                   # option(SPARTAN_ARM/SPARTAN_NIXPORT) + 编译宏
+    'gpu/shim/spartanport_settings.h',      # Values{}：设备缺省值（ARM）+ 覆盖层字号（NIXPORT）
+    'gpu/shim/spartanport_graphics.h',      # 设备线的 540p / 1080p 分辨率名与尺寸（ARM）
+    'gpu/shim/spartanport_ui_font.h',       # 宿主铺进 rootfs 的 CJK 字体（经 FXD_ROOT 找）
 }
 
 
@@ -239,6 +253,7 @@ def main():
     summary = {
         'ALIGNED': counts.get('ALIGNED', 0),
         'REPLAY_pending': counts.get('REPLAY', 0),
+        'PARTIAL': counts.get('PARTIAL', 0),
         'UPSTREAM_expected': counts.get('UPSTREAM', 0),
         'ADD_pending': counts.get('ADD', 0),
         'SKIP': counts.get('SKIP', 0),

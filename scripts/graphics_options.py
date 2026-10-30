@@ -11,6 +11,8 @@ import json
 import math
 from pathlib import Path
 
+import build_flags  # noqa: E402  (scripts/)
+
 RESOLUTIONS = ('native', '480p', '720p', '900p', '1440p', '1800p', '4K',
                '2560x1080', '3440x1440', '3840x1600', '5120x1440', '1920x1200', '2560x1600', '1280x800',
                '1440x900', '1360x768',
@@ -21,9 +23,19 @@ RESOLUTIONS = ('native', '480p', '720p', '900p', '1440p', '1800p', '4K',
 # and #519): 2560x1080, 1440x1080, 2048x1536, 2560x1920 and 8K are still beta.
 TESTED_RESOLUTIONS = ('3440x1440', '3840x1600', '5120x1440', '5120x2160', '1920x1200', '2560x1600', '1280x800',
                       '1440x900', '1360x768', '1280x960', '1920x1440')
+# gport: 安卓增量——设备线额外的两个分辨率：安卓侧的补丁数据集带来的（patches/*.xml 的
+# "Resolution Patch - 540p" / "- 1080p"，上游既没有这两个名字也没有对应补丁）。上游 tag 版的
+# 列表少了它们 → 列表与数据集脱节，补丁在但选不到。桌面构建不带它们，行为与上游逐字一致。
+# 客机侧同名表在 gpu/shim/spartanport_graphics.h（Resolutions / ResolutionSizes），两边要同步。
+DEVICE_RESOLUTIONS = ('540p', '1080p')
+DEVICE_SIZES = {'540p': (960, 540), '1080p': (1920, 1080)}
+if build_flags.ARM:
+    RESOLUTIONS = RESOLUTIONS + DEVICE_RESOLUTIONS
 BETA_RESOLUTIONS = tuple(r for r in RESOLUTIONS[7:] if r not in TESTED_RESOLUTIONS)
 SIZES = {'native': (1920, 1080), '480p': (854, 480), '720p': (1280, 720), '900p': (1600, 900),
          '1440p': (2560, 1440), '1800p': (3200, 1800), '4K': (3840, 2160), '8K': (7680, 4320)}
+if build_flags.ARM:
+    SIZES.update(DEVICE_SIZES)
 ASPECTS = (('16:9', 16 / 9), ('16:10', 16 / 10), ('21:9', 2.37), ('32:9', 32 / 9), ('4:3', 4 / 3))
 ENGINE_FPS = (60, 100, 120, 144, 180, 240)
 # The Steam Deck's DMI names: LCD (Jupiter) and OLED (Galileo), both with a 1280 × 800 screen (#855).
@@ -41,14 +53,35 @@ def steam_deck(dmi=Path('/sys/devices/virtual/dmi/id')):
     return vendor == 'Valve' and product in STEAM_DECK_PRODUCTS
 
 
+# gport: 安卓增量——设备线的缺省集（ARM 构建，scripts/build_flags.py）。移动端 GPU 预算有限，
+# 桌面缺省（FSR 3 升采样、物体运动抖动、不限帧、原生分辨率、120 帧）在手机上跑不动：
+# 升采样与物体运动关掉，渲染分辨率降到 720p，帧率压到 60。
+# 键名与 spartanport.ini 一致；客机侧 gpu/shim/spartanport_settings.h 有同一组缺省值，改一处
+# 要同时改另一处。启动器把这里的值写进 spartanport.ini（INI_DEFAULTS）。
+DEVICE_DEFAULTS = {'render_resolution': '720p', 'engine_fps': '60', 'fps_limit': '60',
+                   'upscaler': 'off', 'object_motion': '0'}
+
+
 def default_render_resolution(dmi=Path('/sys/devices/virtual/dmi/id')):
-    """The render resolution before the player chooses one: the Steam Deck's own screen, or native.
-    A choice saved in spartanport.ini always wins, so this only changes a first start."""
+    """The render resolution before the player chooses one: the device line's 720p, the Steam Deck's
+    own screen, or native. A choice saved in spartanport.ini always wins, so this only changes a
+    first start."""
+    if build_flags.ARM:
+        return DEVICE_DEFAULTS['render_resolution']
     return STEAM_DECK_RESOLUTION if steam_deck(dmi) else 'native'
 
 
-DEFAULTS = {'render_resolution': default_render_resolution(), 'engine_fps': '120', 'deferred_readback': '1',
-            'stale_readback': '1', 'async_shaders': '1'}
+def default_ini_values():
+    """The startup options of spartanport.ini before the player changes them."""
+    values = {'render_resolution': default_render_resolution(), 'engine_fps': '120',
+              'deferred_readback': '1', 'stale_readback': '1', 'async_shaders': '1'}
+    if build_flags.ARM:
+        values['render_resolution'] = DEVICE_DEFAULTS['render_resolution']
+        values['engine_fps'] = DEVICE_DEFAULTS['engine_fps']
+    return values
+
+
+DEFAULTS = default_ini_values()
 RESOLUTION_PREFIX = 'Resolution Patch'
 FPS_PREFIX = 'Frame Rate Patch'
 TEXTURE_FIX = 'Bug Fix - Texture Corruption Fix'

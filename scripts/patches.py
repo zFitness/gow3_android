@@ -16,6 +16,8 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import build_flags  # noqa: E402  (scripts/)
+
 EBOOT_BASE=0x400000
 
 
@@ -345,6 +347,21 @@ REPLACED_BY_EXCLUSIVE={'Bug Fix - Texture Corruption Fix'}
 # which predates them (the startup black screen fix sets a value the game overwrites at once).
 ALWAYS_ON={'Bug Fix - Startup Black Screen'}
 
+# gport: 安卓增量——设备线（ARM 构建）默认勾选的去特效补丁。移动端 GPU 预算有限，桌面缺省
+# 不含它们，SSAO / 景深 / 泛光 / 软粒子 / 动态阴影在手机上都是纯开销。
+# 名字与 patches/*.xml 的 Metadata Name 一致；XML 里没有的名字会被忽略（不同游戏版本）。
+DEVICE_DEFAULT_PATCHES = ('Disable SSAO', 'Disable Motion Blur', 'Disable Depth of Field',
+                          'Disable Bloom', 'Disable Soft Particles', 'Disable Dynamic Shadows')
+
+
+def device_default_patches(metas):
+    """The device line's default patches among these Metadata elements. The desktop build has
+    none: only the ARM build turns them on."""
+    if not build_flags.ARM:
+        return set()
+    names = {m.get('Name') for m in metas}
+    return {name for name in DEVICE_DEFAULT_PATCHES if name in names}
+
 
 def selected_patches(xml, app_version, extra, only=False):
     """The file's isEnabled patches for this version, then the names in extra (";"-separated).
@@ -352,6 +369,10 @@ def selected_patches(xml, app_version, extra, only=False):
     the ALWAYS_ON ones."""
     metas=[m for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer')==app_version]
     names=[] if only else [m.get('Name') for m in metas if m.get('isEnabled','false').lower()=='true']
+    # 设备线：没有用户选择时（only=False）默认勾上去特效补丁。only=True 是启动器保存的完整
+    # 选择，用户取消勾选后不再补回来。
+    if not only:
+        names+=[n for n in sorted(device_default_patches(metas)) if n not in names]
     names+=[n for n in (n.strip() for n in extra.split(';')) if n and n not in names]
     # 各身份可显式关闭常开策略，旧 XML 未声明时保留既有行为。
     names+=[m.get('Name') for m in metas
