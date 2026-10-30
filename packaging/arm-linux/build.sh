@@ -183,12 +183,16 @@ done
 cp -f "$appdir/launcher/spartanport.png" "$appdir/.DirIcon"
 install -m644 packaging/arm-linux/spartanport.desktop "$appdir/spartanport.desktop"
 install -m644 packaging/arm-linux/port.json "$out/pkg/port.json"
-mkdir -p "$out/pkg/assets"
-[[ -f packaging/arm-linux/assets/cover.png ]] && install -m644 packaging/arm-linux/assets/cover.png "$out/pkg/assets/cover.png"
+# 封面不再由包携带：宿主从 AppImage 的 .DirIcon 派生（Port打包规范.md §6.3）。
 
 # 验收：manifest / 布局 / shebang / 黑名单（驱动与游戏数据不得入包）
 [[ $(python3 -c "import json;print(json.load(open('$out/pkg/port.json'))['schema'])") == nixport.port.v1 ]] || die 'port.json schema wrong'
 [[ $(python3 -c "import json;print(json.load(open('$out/pkg/port.json'))['appimage'])") == SpartanPort-arm64.AppImage ]] || die 'port.json appimage field wrong'
+# 新版 manifest 不再声明 arch / program / assets（目标架构由宿主从 ELF 头推导）。
+for field in arch program assets; do
+    python3 -c "import json,sys;sys.exit(0 if '$field' not in json.load(open('$out/pkg/port.json')) else 1)" \
+        || die "port.json must not declare $field"
+done
 for f in "$appdir/entry.sh" "$appdir/AppRun" "$appdir/.DirIcon" "$appdir/bin/spartanport-probe" "$appdir/bin/gpu/libgportgpu.so" "$appdir/bin/gpu/libgportcpu.so" "$appdir/run.py"; do
     [[ -e $f ]] || die "package incomplete: $f"
 done
@@ -220,8 +224,28 @@ mkdir -p "$dist"
 appimage_out=$out/pkg/SpartanPort-arm64.AppImage
 PATH="$shim:$PATH" bash "$fexdroid_tools/scripts/build-port-appimage.sh" "$appdir" "$appimage_out"
 
-# macOS tar 会把 APFS 扩展属性打成 ._ 文件——Port 包必须干净
-COPYFILE_DISABLE=1 tar --exclude='._*' -czf "$dist/spartanport-port.tar.gz" -C "$out/pkg" port.json assets SpartanPort-arm64.AppImage
-end_stage "$dist/spartanport-port.tar.gz ($(du -m "$dist/spartanport-port.tar.gz" | cut -f1) MB)"
+# Port 分发包 = .zip：包根恰含 port.json 与恰好一个 .AppImage（Port打包规范.md §2/§6.1；
+# 归档形态只有 .zip 一种——tar/tar.gz 不再是导入通道，宿主选中即报错）。
+# 不用 shell 的 zip：Python 的 zipfile 写出的条目名不带 macOS 的 ._ 垃圾，条目数也能断言。
+python3 - "$dist/spartanport-port.zip" "$out/pkg/port.json" "$out/pkg/SpartanPort-arm64.AppImage" <<'PY'
+import sys
+import zipfile
 
-printf '\nPort package ready: %s\n' "$dist/spartanport-port.tar.gz"
+target, manifest, appimage = sys.argv[1:4]
+with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
+    archive.write(manifest, 'port.json')
+    archive.write(appimage, 'SpartanPort-arm64.AppImage')
+PY
+# 验收：包根恰含两个条目（一份 manifest + 一个 AppImage）。
+python3 - "$dist/spartanport-port.zip" <<'PY'
+import sys
+import zipfile
+
+names = sorted(zipfile.ZipFile(sys.argv[1]).namelist())
+expected = ['SpartanPort-arm64.AppImage', 'port.json']
+if names != expected:
+    raise SystemExit(f'port package must contain exactly {expected}, got {names}')
+PY
+end_stage "$dist/spartanport-port.zip ($(du -m "$dist/spartanport-port.zip" | cut -f1) MB)"
+
+printf '\nPort package ready: %s\n' "$dist/spartanport-port.zip"

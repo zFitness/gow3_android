@@ -1,7 +1,9 @@
 # packaging/arm-linux — ARM64 Linux 构建与 fexdroid Runtime 打包
 
 把 SpartanPort 交叉构建为 **ARM64 Linux 原生程序**（GPU 原生 + guest x86_64 经 FEXCore），
-并组装成 fexdroid Runtime 包（`.tar.gz`，契约见 fexdroid 仓 `my-docs/Runtime打包规范.md`）。
+并组装成 fexdroid 的 **Port 分发包**（`.zip`：包根恰含 `port.json` 与恰好一个 `.AppImage`，
+契约见 fexdroid 仓 `my-docs/移植规范/Port打包规范.md`；归档形态只有 `.zip` 一种，
+tar/tar.gz 不再是导入通道）。
 
 与 `packaging/linux/`（x86_64 AppImage）同构：同一套构建步骤的交叉变体，程序树采用上游
 packaged 布局（`bin/spartanport-probe`、`bin/gpu/`、`run.py`、`scripts/`），差异只有三点：
@@ -13,7 +15,7 @@ packaged 布局（`bin/spartanport-probe`、`bin/gpu/`、`run.py`、`scripts/`�
 ## 用法
 
 ```bash
-bash packaging/arm-linux/build.sh      # 构建 + 组包 + verb 冒烟 → dist/spartanport-runtime.tar.gz
+bash packaging/arm-linux/build.sh      # 构建 + 组包 + verb 冒烟 → dist/spartanport-port.zip
 bash packaging/arm-linux/deploy.sh     # adb push 到 fexdroid debug app（真机调试）
 ```
 
