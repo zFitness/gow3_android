@@ -81,8 +81,9 @@
       "x": 0.915,
       "y": 0.265,
       "toggleSwitch": false,
-      "text": "强化",
-      "iconId": 0
+      "text": "",
+      "iconId": 0,
+      "icon": "upgrade"
     },
     {
       "type": "BUTTON",
@@ -97,8 +98,9 @@
       "x": 0.915,
       "y": 0.38,
       "toggleSwitch": false,
-      "text": "暂停",
-      "iconId": 0
+      "text": "",
+      "iconId": 0,
+      "icon": "pause"
     },
     {
       "type": "BUTTON",
@@ -113,8 +115,9 @@
       "x": 0.185,
       "y": 0.055,
       "toggleSwitch": false,
-      "text": "菜单",
-      "iconId": 0
+      "text": "",
+      "iconId": 0,
+      "icon": "gear"
     },
     {
       "type": "BUTTON",
@@ -129,8 +132,9 @@
       "x": 0.245,
       "y": 0.055,
       "toggleSwitch": false,
-      "text": "奖杯",
-      "iconId": 0
+      "text": "",
+      "iconId": 0,
+      "icon": "trophy"
     },
     {
       "type": "BUTTON",
@@ -145,8 +149,9 @@
       "x": 0.305,
       "y": 0.055,
       "toggleSwitch": false,
-      "text": "帧率",
-      "iconId": 0
+      "text": "",
+      "iconId": 0,
+      "icon": "fps"
     },
     {
       "type": "STICK",
@@ -177,7 +182,7 @@
       "x": 0.135,
       "y": 0.395,
       "toggleSwitch": false,
-      "text": "武器",
+      "text": "WEAPONS",
       "iconId": 0
     },
     {
@@ -193,7 +198,7 @@
       "x": 0.115,
       "y": 0.865,
       "toggleSwitch": false,
-      "text": "怒",
+      "text": "RAGE",
       "iconId": 0
     },
     {
@@ -226,7 +231,8 @@
       "y": 0.66,
       "toggleSwitch": false,
       "text": "",
-      "iconId": 55
+      "iconId": 0,
+      "icon": "ps-square"
     },
     {
       "type": "BUTTON",
@@ -242,7 +248,8 @@
       "y": 0.56,
       "toggleSwitch": false,
       "text": "",
-      "iconId": 56
+      "iconId": 0,
+      "icon": "ps-triangle"
     },
     {
       "type": "BUTTON",
@@ -258,7 +265,8 @@
       "y": 0.76,
       "toggleSwitch": false,
       "text": "",
-      "iconId": 53
+      "iconId": 0,
+      "icon": "ps-cross"
     },
     {
       "type": "BUTTON",
@@ -274,7 +282,8 @@
       "y": 0.66,
       "toggleSwitch": false,
       "text": "",
-      "iconId": 54
+      "iconId": 0,
+      "icon": "ps-circle"
     }
   ]
 }
