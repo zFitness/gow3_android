@@ -47,7 +47,7 @@
       ],
       "scale": 1.1,
       "x": 0.915,
-      "y": 0.07,
+      "y": 0.065,
       "toggleSwitch": false,
       "text": "R2",
       "iconId": 0
@@ -63,7 +63,7 @@
       ],
       "scale": 1.05,
       "x": 0.915,
-      "y": 0.185,
+      "y": 0.175,
       "toggleSwitch": false,
       "text": "R1",
       "iconId": 0
@@ -77,9 +77,25 @@
         "NONE",
         "NONE"
       ],
-      "scale": 0.95,
+      "scale": 0.85,
       "x": 0.915,
-      "y": 0.3,
+      "y": 0.265,
+      "toggleSwitch": false,
+      "text": "强化",
+      "iconId": 0
+    },
+    {
+      "type": "BUTTON",
+      "shape": "ROUND_RECT",
+      "bindings": [
+        "GAMEPAD_BUTTON_SELECT",
+        "NONE",
+        "NONE",
+        "NONE"
+      ],
+      "scale": 0.85,
+      "x": 0.915,
+      "y": 0.38,
       "toggleSwitch": false,
       "text": "暂停",
       "iconId": 0
@@ -161,7 +177,7 @@
       "x": 0.135,
       "y": 0.395,
       "toggleSwitch": false,
-      "text": "",
+      "text": "武器",
       "iconId": 0
     },
     {
