@@ -34,7 +34,7 @@ bash packaging/arm-linux/deploy.sh     # adb push 到 fexdroid debug app（真�
 | `cross-toolchain.cmake` | gpu/FEX 的 CMake 交叉工具链（CMAKE_SYSROOT + llvm-ar 修复） |
 | `fetch-sysroot.py` | Debian trixie arm64 sysroot 拉取（SHA256 锁定） |
 | `entry.sh` | 程序树入口：fexdroid 宿主环境块 + config/info 契约 + `exec run.py` |
-| `runtime.json` | fexdroid manifest v1（entries/capabilities/requires/storage） |
+| `port.json` | fexdroid Port 分发包契约（包根；`virtualKeys` 指向布局文件） |
 | `deploy.sh` | 真机调试推送（adb + run-as） |
 
 ## 依赖库策略
