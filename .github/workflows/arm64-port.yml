@@ -43,10 +43,21 @@ jobs:
         run: bash packaging/arm-linux/ci-deps.sh
 
       # 组 AppImage 要用宿主仓的打包脚本（mksquashfs + glibc 天花板 + 排除清单）。
+      # 先下 tarball（比 clone 稳），失败再退回 clone。
       - name: Host tools
+        env:
+          GIT_TERMINAL_PROMPT: 0
         run: |
-          git clone --depth 1 https://github.com/zFitness/nixport.git "$GITHUB_WORKSPACE/../fexdroid"
-          test -x "$GITHUB_WORKSPACE/../fexdroid/scripts/build-port-appimage.sh"
+          set -euo pipefail
+          dest="$GITHUB_WORKSPACE/../fexdroid"
+          rm -rf "$dest" && mkdir -p "$dest"
+          if ! curl -fsSL --retry 3 --retry-delay 5 https://codeload.github.com/zFitness/nixport/tar.gz/refs/heads/main \
+               | tar xz -C "$dest" --strip-components=1; then
+            rm -rf "$dest"
+            git clone --depth 1 https://github.com/zFitness/nixport.git "$dest"
+          fi
+          test -x "$dest/scripts/build-port-appimage.sh"
+          ls -l "$dest/scripts/build-port-appimage.sh"
 
       - name: Build
         env:
