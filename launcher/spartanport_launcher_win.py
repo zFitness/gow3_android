@@ -54,6 +54,7 @@ import nixport_host  # noqa: E402  (scripts/)
 import save_backup  # noqa: E402  (scripts/)
 import save_import  # noqa: E402  (scripts/)
 import steam_shortcut  # noqa: E402  (scripts/)
+import controller_mapper  # noqa: E402  (launcher/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
 from prepare import load_sfo  # noqa: E402  (scripts/)
 legacy.forward_environment()  # before the folders below are read from the environment
@@ -76,7 +77,7 @@ RELEASES_API = 'https://api.github.com/repos/FelipePrado0/SpartanPort/releases/l
 RELEASES_PAGE = 'https://github.com/FelipePrado0/SpartanPort/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'spartanport-update'
 # Never copied over an installation by an update (the package does not hold them either).
-USER_FILES = ('user', 'out', 'mods', 'spartanport.ini', 'settings.json', 'game_icon.ico', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log')
+USER_FILES = ('user', 'out', 'mods', 'spartanport.ini', 'settings.json', 'game_icon.ico', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log', 'gamecontrollerdb.txt')
 # The title face (Cinzel Black), next to spartanport.ico; main() registers it for this process only.
 FONT_FILE = PORT_DIR / 'launcher' / 'Cinzel-Black.ttf'
 FR_PRIVATE = 0x10
@@ -420,11 +421,7 @@ def open_url(url):
 
 
 def _(en, ru=None):
-    if en.endswith(WARN):
-        return _(en[:-len(WARN)], ru and ru.removesuffix(WARN)) + WARN
-    if LANG == 'ru':
-        return ru or en
-    return spartanport_lang.table(LANG).get(en) or en
+    return translate(LANG, en, ru)
 
 
 def environment_language():
@@ -484,17 +481,19 @@ def heading_font(size, fallback=None, every_language=False):
 # launcher's own settings.json (passed to run.py as environment variables).
 
 INI_FLAGS = {'cheat_double_jumps', 'cheat_very_hard', 'object_motion', 'show_fps', 'vsync', 'async_shaders', 'deferred_readback',
-             'stale_readback'}
+             'stale_readback', 'hdr', 'motion_blur', 'depth_of_field'}
 # The graphics keys are also in the in-game menu (Insert / R3+L2); run.py reads the startup ones.
 INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
                 'live_resolution': 'auto', 'display_mode': 'windowed', 'vsync': '1', 'fps_limit': '0',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
-                'render_resolution': graphics_options.DEFAULTS['render_resolution'],
-                'engine_fps': graphics_options.DEFAULTS['engine_fps'],
-                'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
+                'render_resolution': graphics_options.DEFAULTS['render_resolution'], 'engine_fps': '120',
+                'frames_queued': '1', 'monitor': '', 'hdr': '0', 'glyph_style': 'off', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
                 'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
-                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100'}
+                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100', 'menu_confirm_swap': '0',
+                'master_volume': '100', 'audio_channels': 'auto', 'motion_blur': '1',
+                'depth_of_field': '1'}
+
 # gport: 安卓增量——设备线（ARM 构建）的缺省集与桌面不同：移动端 GPU 预算有限，关升采样与
 # 物体运动抖动、限帧 60、渲染 720p、引擎帧率 60。缺省值的唯一来源是 graphics_options 的
 # DEVICE_DEFAULTS（客机侧 gpu/shim/spartanport_settings.h 与之同源），桌面构建两个开关都关，
@@ -503,6 +502,8 @@ if build_flags.ARM:
     INI_DEFAULTS.update({key: value for key, value in graphics_options.DEVICE_DEFAULTS.items()
                          if key in INI_DEFAULTS})
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
+AUDIO_CHANNELS = [('auto', ('Automatic',)), ('stereo', ('Stereo',)), ('5.1', ('5.1 surround',)),
+                  ('7.1', ('7.1 surround',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('100', ('100',)), ('120', ('120',)), ('144', ('144',)), ('180', ('180',)), ('240', ('240',)), ('0', ('Unlimited',))]
 # The sidebar's pages, top to bottom, and the methods that refresh a page's lists when it is shown.
@@ -510,6 +511,7 @@ PAGES = ('home', 'graphics', 'performance', 'game', 'controls', 'mods', 'trophie
 PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_game_patches',), 'mods': ('refresh_lists',),
                 'trophies': ('refresh_trophies',)}
 UI_SCALES = [('auto', ('Auto',)), ('1', ('1x',)), ('2', ('2x',))]
+CONTROLS_LAYOUT = 4  # settings layout: 4 = remappable keyboard stick directions (migrate_controls)
 APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.get('SPARTAN_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
@@ -518,8 +520,8 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
-                'rage_one_input': True, 'stick_prompts': 'keyboard', 'controls_layout': 2,
-                'glyph_style': 'off'}
+                'rage_one_input': True, 'stick_prompts': 'keyboard', 'controls_layout': CONTROLS_LAYOUT,
+                'switch_attacks': False, 'glyph_style': 'off', 'menu_confirm_swap': '0'}
 
 # PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
 # from the analog triggers and the left touchpad click (photo mode) from L1 + the right click's
@@ -585,6 +587,8 @@ STICK_PROMPTS = [('keyboard', ('Keyboard (native)',)), ('mouse', ('Adaptive mous
 AIM_STYLES = [('0', ('Relative',)), ('1', ('Absolute',))]
 GLYPH_STYLES = [('off', ('Original (default)',)), ('auto', ('Match my controller',)), ('xbox', ('Xbox',)),
                 ('nintendo', ('Nintendo',)), ('keyboard', ('Keyboard',))]
+MENU_CONFIRM_STYLES = [('0', ('Cross confirms, Circle cancels (default)',)),
+                       ('1', ('Circle confirms, Cross cancels',))]
 
 
 # Keyboard capture on the Controls page: the Tk keysym of a pressed key and the SDL scancode
@@ -642,7 +646,8 @@ def bind_key(bindings, button, name):
     """Gives `name` to `button` in {button: key name}; a button that had it takes the old key of
     `button`, so no key presses two buttons. Returns the button that swapped, or None."""
     old = bindings.get(button, '')
-    other = next((b for b, k in bindings.items() if b != button and k.strip().lower() == name.lower()), None)
+    other = next((b for b, k in bindings.items()
+                  if b != button and name.casefold() != 'none' and k.strip().casefold() == name.casefold()), None)
     bindings[button] = name
     if other:
         bindings[other] = old
@@ -659,24 +664,36 @@ KEY_DEFAULTS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'Mouse Left'
                 'up': '1', 'right': '2', 'down': '3', 'left': '4'}
 # Actions of the keyboard map only (runtime_pad.c's host-only sources), as CONTROLS rows. Rage of
 # Sparta (L3 + R3 on one input) follows R3; it is used instead of L3 and R3 while 'rage_one_input'
-# is on. "None" leaves a row without an input.
-RAGE_ROW, GRAB_ROW, DODGE_ROW = ('rage', 'Mouse Middle', None), ('grab', 'C', None), ('dodge', 'Mouse Back', None)
-KEY_ACTIONS = [RAGE_ROW, GRAB_ROW, DODGE_ROW]
-ACTION_NAMES = {'rage': 'Rage of Sparta', 'grab': 'Grab', 'dodge': 'Dodge'}
+# is on. "None" leaves a row without an input. The wheel cycles the weapons on the d-pad.
+RAGE_ROW, GRAB_ROW, DODGE_ROW = ('rage', 'F', None), ('grab', 'C', None), ('dodge', 'Mouse Back', None)
+# Rage of Sparta was on the wheel click until the wheel cycled the weapons, where a scroll could set it
+# off. A saved table keeps it there (keep_saved_rage): nothing moves for a player who set up keys.
+RAGE_LEGACY_INPUT = 'Mouse Middle'
+WEAPON_ROWS = (('weapon_next', 'Wheel Up', None), ('weapon_prev', 'Wheel Down', None))
+STICK_ROWS = (('move_up', 'W', None), ('move_down', 'S', None),
+              ('move_left', 'A', None), ('move_right', 'D', None),
+              ('look_up', 'Up', None), ('look_down', 'Down', None),
+              ('look_left', 'Left', None), ('look_right', 'Right', None))
+KEY_ACTIONS = [*STICK_ROWS, RAGE_ROW, GRAB_ROW, DODGE_ROW, *WEAPON_ROWS]
+ACTION_NAMES = {'rage': 'Rage of Sparta', 'grab': 'Grab', 'dodge': 'Dodge',
+                'weapon_next': 'Next weapon', 'weapon_prev': 'Previous weapon',
+                'move_up': 'Move forward', 'move_down': 'Move backward',
+                'move_left': 'Move left', 'move_right': 'Move right',
+                'look_up': 'Right stick up', 'look_down': 'Right stick down',
+                'look_left': 'Right stick left', 'look_right': 'Right stick right'}
 RAGE_BUTTONS = ('l3', 'r3')
-CONTROLS_LAYOUT = 2  # settings layout: 2 = one keyboard & mouse table (migrate_controls)
 
 
 def table_rows(kind):
     """CONTROLS rows of a table, in display order; the keyboard one adds its actions."""
     if kind != 'key':
         return CONTROLS
-    rows = []
+    rows = list(STICK_ROWS)
     for row in CONTROLS:
         rows.append(row)
         if row[0] == 'r3':
             rows.append(RAGE_ROW)
-    return rows + [GRAB_ROW, DODGE_ROW]
+    return rows + [GRAB_ROW, DODGE_ROW, *WEAPON_ROWS]
 MOUSE_NAMES = {name.casefold() for name in (*TK_TO_MOUSE.values(), 'Wheel Up', 'Wheel Down')}
 
 
@@ -706,7 +723,7 @@ def keyboard_map(controls, rage=True):
             entries.append(f'{button}=None')
             continue
         value = (chosen.get(button) or default_input(row, 'key')).strip()
-        game_default = key if row in CONTROLS else ''  # the game has no key of its own for an action
+        game_default = key if row in CONTROLS or row in STICK_ROWS else ''
         if value.casefold() != game_default.casefold() and not set(value) & set(',='):
             entries.append(f'{button}={value}')
     return ','.join(entries)
@@ -739,18 +756,59 @@ def control_map(controls, kind):
                     if button in chosen and not set(chosen[button]) & set(',='))
 
 
+def inputs_in_use(chosen, rage, skipped):
+    """The inputs a keyboard table sends (saved or default), leaving out the `skipped` rows and the
+    rows the table does not send (L3 and R3 with Rage of Sparta on one input, else the rage row)."""
+    unused = set(RAGE_BUTTONS) if rage else {'rage'}
+    return {(chosen.get(row[0]) or default_input(row, 'key')).strip().casefold()
+            for row in table_rows('key') if row[1] and row[0] not in set(skipped) | unused}
+
+
+def claim_new_actions(controls, rage, actions):
+    """Leaves the `actions` (rows) that a saved keyboard table predates without an input ('None')
+    when their default one is already used by another row; the rest follow their defaults. A
+    table with nothing saved follows the defaults, which never collide."""
+    chosen = control_values(controls, 'key')
+    if not chosen:
+        return
+    taken = inputs_in_use(chosen, rage, {row[0] for row in actions})
+    controls['key'].update({button: 'None' for button, default, _pad in actions if default.casefold() in taken})
+
+
+def keep_saved_rage(controls, rage):
+    """A saved keyboard table that never moved Rage of Sparta keeps it on the wheel click it had
+    (RAGE_LEGACY_INPUT), unless another row of the table uses that input. A table with nothing
+    saved follows the new default."""
+    chosen = control_values(controls, 'key')
+    if not chosen or 'rage' in chosen:
+        return
+    if RAGE_LEGACY_INPUT.casefold() not in inputs_in_use(chosen, rage, {'rage'}):
+        controls['key']['rage'] = RAGE_LEGACY_INPUT
+
+
 def migrate_controls(saved):
-    """Settings saved before the keyboard & mouse table (CONTROLS_LAYOUT). A player who saved keys
-    in Keyboard Mapping keeps the whole layout they had (the game's keys for the rest); one who
-    used Native Translation keeps that table. A new action whose default input is already taken
-    stays without one."""
+    """Settings saved before the current keyboard & mouse table (CONTROLS_LAYOUT). A player who
+    saved keys in Keyboard Mapping keeps the whole layout they had (the game's keys for the rest);
+    one who used Native Translation keeps that table; layouts 2 and 3 retain their saved actions.
+    New actions or directions whose default input is already taken stay unbound. Layout 2 keeps
+    Rage of Sparta on the wheel click (keep_saved_rage)."""
     if not isinstance(saved, dict) or not saved or saved.get('controls_layout') == CONTROLS_LAYOUT:
         return saved
+    previous_layout = saved.get('controls_layout')
+    current_table = previous_layout in (2, 3)
     saved = dict(saved)
     controls = dict(saved['controls']) if isinstance(saved.get('controls'), dict) else {}
     native = controls.pop('native', None)
-    if saved.pop('native_input', False) and isinstance(native, dict):
+    if current_table:
+        if isinstance(controls.get('key'), dict):
+            controls['key'] = dict(controls['key'])
+            if previous_layout == 2:
+                keep_saved_rage(controls, saved.get('rage_one_input', True))
+                claim_new_actions(controls, saved.get('rage_one_input', True), WEAPON_ROWS)
+    elif saved.pop('native_input', False) and isinstance(native, dict):
         controls['key'] = dict(native)  # its defaults are the new ones
+        keep_saved_rage(controls, saved.get('native_rage', True))
+        claim_new_actions(controls, saved.get('native_rage', True), WEAPON_ROWS)
     elif controls.get('key'):
         kept = control_values(controls, 'key')
         layout = {button: kept.get(button) or key for button, key, _pad in CONTROLS if key}
@@ -758,10 +816,12 @@ def migrate_controls(saved):
         taken = {value.strip().casefold() for button, value in layout.items()
                  if not (rage and button in RAGE_BUTTONS)}
         for button, default, _pad in KEY_ACTIONS:
+            default = RAGE_LEGACY_INPUT if button == 'rage' else default  # the one they had
             layout[button] = 'None' if default.casefold() in taken else default
         controls['key'] = layout
     if 'native_rage' in saved:
         saved['rage_one_input'] = saved.pop('native_rage')
+    claim_new_actions(controls, saved.get('rage_one_input', True), STICK_ROWS)
     saved['controls'] = controls
     saved['controls_layout'] = CONTROLS_LAYOUT
     return saved
@@ -769,8 +829,9 @@ def migrate_controls(saved):
 UPSCALERS = [('fsr3', ('FSR 3.1 (every GPU)', 'FSR 3.1 (любая видеокарта)')),
              ('taa', ('TAA (native resolution anti-aliasing)', 'TAA (нативное сглаживание)')),
              ('off', ('Off', 'Выключен'))]
-PRESETS = [('0', ('Native AA (×1.0)',)), ('1', ('Quality (×1.5)',)), ('2', ('Balanced (×1.7)',)),
-           ('3', ('Performance (×2)',)), ('4', ('Ultra Performance (×3)',))]
+# Ordered by render scale; the values are spartanport.ini preset numbers (Ultra Quality was added as 5).
+PRESETS = [('0', ('Native AA (100%)',)), ('5', ('Ultra Quality (77%)',)), ('1', ('Quality (67%)',)),
+           ('2', ('Balanced (59%)',)), ('3', ('Performance (50%)',)), ('4', ('Ultra Performance (33%)',))]
 OUTPUTS = [('1280x720', ('1280 × 720',)), ('1920x1080', ('1920 × 1080',)),
            ('2560x1440', ('2560 × 1440',)), ('3840x2160', ('3840 × 2160 (4K)',))]
 LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарте)')), ('0', ('Off (faster)', 'Выключена (быстрее)')),
@@ -848,14 +909,38 @@ def ini_path():
 
 def load_ini():
     values, lines = dict(INI_DEFAULTS), []
+    legacy = load_json(CONFIG_FILE, {})
+    if not isinstance(legacy, dict):
+        legacy = {}
+    values.update(monitor=str(legacy.get('monitor') or ''), hdr='1' if legacy.get('hdr') else '0')
+    values['glyph_style'] = legacy.get('glyph_style', 'off')
+    if 'menu_confirm_swap' in legacy:
+        leg_val = str(legacy['menu_confirm_swap']).strip().lower()
+        values['menu_confirm_swap'] = '1' if leg_val in ('1', 'true', 'circle', 'swapped', 'yes', 'on') else '0'
+    elif 'menu_confirm' in legacy:
+        leg_val = str(legacy['menu_confirm']).strip().lower()
+        values['menu_confirm_swap'] = '1' if leg_val in ('circle', 'swapped', '1', 'true', 'yes', 'on') else '0'
+    else:
+        values['menu_confirm_swap'] = '0'
     try:
         lines = ini_path().read_text(encoding='utf-8').splitlines()
     except OSError:
         pass
+    ini_swap = None
+    ini_alias = None
     for line in lines:
         if '=' in line and not line.lstrip().startswith('#'):
             key, value = line.split('=', 1)
-            values[key.strip()] = value.strip()
+            k, v = key.strip(), value.strip()
+            values[k] = v
+            if k == 'menu_confirm_swap':
+                ini_swap = v
+            elif k == 'menu_confirm':
+                ini_alias = v
+    if ini_swap is not None:
+        values['menu_confirm_swap'] = '1' if str(ini_swap).strip().lower() in ('1', 'true', 'circle', 'swapped', 'yes', 'on') else '0'
+    elif ini_alias is not None:
+        values['menu_confirm_swap'] = '1' if str(ini_alias).strip().lower() in ('circle', 'swapped', '1', 'true', 'yes', 'on') else '0'
     return values, lines
 
 
@@ -1208,37 +1293,70 @@ def game_profile_of(folder):
     return title_id, game_profile_for(folder)
 
 
-def write_trophy_texts(folder):
-    """user/trophy_texts.txt: the trophy names, descriptions and labels the game shows, in the launcher's
-    language (the game reads it at start: the notice and the list of F8 / R3+R2). A failure is harmless."""
-    labels = (('heading', _('Trophies', 'Трофеи')), ('notice', _('TROPHY UNLOCKED', 'ТРОФЕЙ ПОЛУЧЕН')),
-              ('unlocked', _('UNLOCKED', 'ПОЛУЧЕН')), ('locked', _('LOCKED', 'ЗАКРЫТ')),
-              ('all', _('All trophies', 'Все')), ('only_unlocked', _('Unlocked', 'Получены')),
-              ('only_locked', _('Locked', 'Закрыты')),
-              ('counter', _('{} of {} unlocked', '{} из {} получено')),
-              ('hint', _('Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close',
-                         'Вверх/Вниз: прокрутка   Влево/Вправо: фильтр   F8 / R3+R2 / Esc: закрыть')))
-    lines = [f'# Written by the launcher on every start (language: {LANG}); do not edit.']
+def translate(language, en, ru=None):
+    """`en` in `language` ("ru": `ru`), as _() does for the launcher's own language."""
+    if en.endswith(WARN):
+        return translate(language, en[:-len(WARN)], ru and ru.removesuffix(WARN)) + WARN
+    if language == 'ru':
+        return ru or en
+    return spartanport_lang.table(language).get(en) or en
+
+
+def trophy_labels(_):
+    """The labels of the game's trophy notice and window, translated by `_`."""
+    return (('heading', _('Trophies', 'Трофеи')), ('notice', _('TROPHY UNLOCKED', 'ТРОФЕЙ ПОЛУЧЕН')),
+            ('unlocked', _('UNLOCKED', 'ПОЛУЧЕН')), ('locked', _('LOCKED', 'ЗАКРЫТ')),
+            ('all', _('All trophies', 'Все')), ('only_unlocked', _('Unlocked', 'Получены')),
+            ('only_locked', _('Locked', 'Закрыты')),
+            ('counter', _('{} of {} unlocked', '{} из {} получено')),
+            ('hint', _('Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close',
+                       'Вверх/Вниз: прокрутка   Влево/Вправо: фильтр   F8 / R3+R2 / Esc: закрыть')),
+            ('notifications', _('Notifications', 'Уведомления')),
+            ('order_list', _('List order', 'Порядок списка')),
+            ('order_common', _('Most earned first', 'Сначала частые')),
+            ('order_rare', _('Rarest first', 'Сначала редкие')),
+            ('rarity', _('{}% of players', '{}% игроков')),
+            ('common', _('Common', 'Обычный')),
+            ('rare', _('Rare', 'Редкий')),
+            ('very_rare', _('Very rare', 'Очень редкий')),
+            ('ultra_rare', _('Ultra rare', 'Ультраредкий')),
+            ('hint_order', _('Triangle/Tab: order   L1/R1: notifications', 'Треугольник/Tab: порядок   L1/R1: уведомления')),
+            ('hint_notifications', _('L1/R1: trophies   F8 / R3+R2 / Esc: close', 'L1/R1: трофеи   F8 / R3+R2 / Esc: закрыть')))
+
+
+def trophy_texts(language):
+    """The text of a trophy_texts.txt in `language`: labels, then "ID=Name | Description" per trophy."""
+    labels = trophy_labels(lambda en, ru=None: translate(language, en, ru))
+    lines = [f'# Written by the launcher on every start (language: {language}); do not edit.']
     lines += [f'@{key}={" ".join(text.split())}' for key, text in labels]
     for trophy in range(spartanport_trophies.TROPHY_COUNT):
-        name, description = spartanport_trophies.text(LANG, trophy)
+        name, description = spartanport_trophies.text(language, trophy)
         lines.append(f'{trophy}={name} | {description}')
+    return '\n'.join(lines) + '\n'
+
+
+def write_trophy_texts(folder):
+    """user/trophy_texts.txt: the trophy names, descriptions and labels the game shows, in the launcher's
+    language (the game reads it at start: the notice and the list of F8 / R3+R2), and the same in every
+    language in user/trophy_texts/<language>.txt, for the language chosen inside the game. A failure is
+    harmless."""
     try:
         folder = Path(folder)
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / 'trophy_texts.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        (folder / 'trophy_texts').mkdir(parents=True, exist_ok=True)
+        (folder / 'trophy_texts.txt').write_text(trophy_texts(LANG), encoding='utf-8')
+        for language in spartanport_trophies.LANGUAGES:
+            (folder / 'trophy_texts' / f'{language}.txt').write_text(trophy_texts(language), encoding='utf-8')
     except OSError:
         pass
 
 
 def game_environment(s):
     env = dict(os.environ)
-    write_trophy_texts(Path(s.get('user_dir') or DATA_DIR / 'user'))
+    user_dir = s.get('user_dir') or env.get('SPARTAN_USER_DIR') or str(DATA_DIR / 'user')
+    write_trophy_texts(Path(user_dir))
     env['SPARTAN_GAME_DIR'] = s['game_dir']
     env.pop('SPARTAN_PATCH_DIR', None)
-    # Temporal upscaling is parked (build_graphics): a switch saved on by 2.1.8 has no control left to
-    # turn it off, so it is ignored until the upscaler section comes back.
-    env['SPARTAN_EXPERIMENTAL_UPSCALER'] = '0'
+    env['SPARTAN_EXPERIMENTAL_UPSCALER'] = '1' if s.get('experimental_upscaler') else '0'
     if s.get('update_dir'):
         env['SPARTAN_PATCH_DIR'] = s['update_dir']
     if not WINDOWS:
@@ -1253,8 +1371,7 @@ def game_environment(s):
     if profile and chosen is not None:
         env['SPARTAN_PATCHES'] = ';'.join(chosen)
         env['SPARTAN_PATCHES_ONLY'] = '1'
-    if s['user_dir']:
-        env['SPARTAN_USER_DIR'] = s['user_dir']
+    env['SPARTAN_USER_DIR'] = user_dir
     if not WINDOWS:
         env['SPARTAN_FSR4_DIR'] = str(fsr4_folder())
     env['SPARTAN_MODS_DIR'] = s['mods_dir'] or str(DATA_DIR / 'mods')
@@ -1266,8 +1383,7 @@ def game_environment(s):
     # Menu language is independent from the game's text and voice language.
     env['SPARTAN_UI_LANGUAGE'] = s.get('ui_language') or windows_language()
     env['SPARTAN_DISCORD'] = '1' if s.get('discord_rpc') else '0'
-    if s['hdr']:
-        env['SPARTAN_HDR'] = '1'
+    env['SPARTAN_HDR'] = '1' if s['hdr'] else '0'
     for key, name in (('draw_pipe', 'SPARTAN_DRAW_PIPE'), ('readbacks', 'SPARTAN_READBACKS'), ('no_msaa', 'SPARTAN_NO_MSAA')):
         if s.get(key):
             env[name] = s[key]
@@ -1302,6 +1418,9 @@ def game_environment(s):
         env['SPARTAN_KEY_MAP'] = value
     if value := control_map(controls, 'pad'):
         env['SPARTAN_PAD_MAP'] = value
+    env.pop('SPARTAN_SWITCH_ATTACKS', None)
+    if s.get('switch_attacks'):
+        env['SPARTAN_SWITCH_ATTACKS'] = '1'
     env.pop('SPARTAN_STICK_PROMPTS', None)
     if s.get('stick_prompts') in dict(STICK_PROMPTS):
         env['SPARTAN_STICK_PROMPTS'] = s['stick_prompts']
@@ -1309,6 +1428,17 @@ def game_environment(s):
     env.pop('SPARTAN_GLYPH_STYLE', None)
     if glyph_style in ('auto', 'xbox', 'nintendo', 'keyboard'):
         env['SPARTAN_GLYPH_STYLE'] = glyph_style
+    menu_confirm_swap = s.get('menu_confirm_swap')
+    if menu_confirm_swap is None:
+        if 'menu_confirm' in s:
+            menu_confirm_swap = '1' if str(s['menu_confirm']).strip().lower() in ('circle', 'swapped', '1', 'true', 'yes', 'on') else '0'
+        else:
+            ini_vals, _ = load_ini()
+            menu_confirm_swap = ini_vals.get('menu_confirm_swap', '0')
+    env.pop('SPARTAN_MENU_CONFIRM_SWAP', None)
+    env.pop('SPARTAN_MENU_CONFIRM', None)
+    if str(menu_confirm_swap).strip().lower() in ('1', 'true', 'circle', 'swapped', 'yes', 'on'):
+        env['SPARTAN_MENU_CONFIRM_SWAP'] = '1'
     env['PYTHONUNBUFFERED'] = '1'
     env['PYTHONIOENCODING'] = 'utf-8'
     return env
@@ -1330,18 +1460,72 @@ RESOLUTION_CHOICES = [(name, (graphics_options.resolution_label(name),)) for nam
 ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('100', ('100',)), ('120', ('120',)), ('144', ('144',)), ('180', ('180',)), ('240', ('240',))]
 
 
+def toplevel_hwnd(root):
+    """The top-level Win32 frame window that wraps Tk's client area (GA_ROOT)."""
+    if not WINDOWS:
+        return None
+    try:
+        user32 = ctypes.windll.user32
+        user32.GetAncestor.argtypes, user32.GetAncestor.restype = (ctypes.c_void_p, ctypes.c_uint), ctypes.c_void_p
+        user32.GetParent.argtypes, user32.GetParent.restype = (ctypes.c_void_p,), ctypes.c_void_p
+        root.update_idletasks()
+        wid = root.winfo_id()
+        if not wid:
+            return None
+        return user32.GetAncestor(wid, 2) or user32.GetParent(wid) or wid
+    except (AttributeError, OSError):
+        return None
+
+
+def native_dark_titlebar(root, bg_hex=BG):
+    """Windows: match the native title bar to SpartanPort's dark theme using DWM APIs (#914).
+    DWMWA_USE_IMMERSIVE_DARK_MODE (20 on Windows 10 20H1+ and Windows 11; fallback 19 on 1809/1903/1909)
+    switches the title bar frame, caption buttons, and context menu to dark mode.
+    DWMWA_CAPTION_COLOR (35 on Windows 11 build 22000+) sets the exact caption background color.
+    DWMWA_TEXT_COLOR (36 on Windows 11 build 22000+) sets the title text to crisp white."""
+    if not WINDOWS:
+        return False
+    try:
+        import ctypes.wintypes as wt
+        dwmapi = ctypes.windll.dwmapi
+        dwmapi.DwmSetWindowAttribute.argtypes = (ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint)
+        dwmapi.DwmSetWindowAttribute.restype = ctypes.c_long
+        hwnd = toplevel_hwnd(root)
+        if not hwnd:
+            return False
+
+        # DWMWA_USE_IMMERSIVE_DARK_MODE: 20 (Windows 10 20H1+ and Windows 11), 19 (Windows 10 1809/1903/1909)
+        enabled = ctypes.c_int(1)
+        for attr in (20, 19):
+            if dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(enabled), ctypes.sizeof(enabled)) == 0:
+                break
+
+        # DWMWA_CAPTION_COLOR (35) and DWMWA_TEXT_COLOR (36) on Windows 11 (build 22000+)
+        if bg_hex and bg_hex.startswith('#') and len(bg_hex) == 7:
+            r = int(bg_hex[1:3], 16)
+            g = int(bg_hex[3:5], 16)
+            b = int(bg_hex[5:7], 16)
+            colorref = wt.DWORD((b << 16) | (g << 8) | r)
+            dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(colorref), ctypes.sizeof(colorref))
+            white = wt.DWORD(0x00ffffff)
+            dwmapi.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(white), ctypes.sizeof(white))
+        return True
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
 def native_window_icons(root, ico):
     """Windows: Tk gives the window one small icon for both slots, and under pythonw the taskbar then
     shows Tk's feather. The .ico's own large and small images go to the window and its class."""
     user32 = ctypes.windll.user32
-    user32.GetAncestor.argtypes, user32.GetAncestor.restype = (ctypes.c_void_p, ctypes.c_uint), ctypes.c_void_p
     user32.LoadImageW.argtypes = (ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint, ctypes.c_int, ctypes.c_int,
                                   ctypes.c_uint)
     user32.LoadImageW.restype = ctypes.c_void_p
     user32.SendMessageW.argtypes = (ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p)
     user32.SetClassLongPtrW.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
-    root.update_idletasks()
-    hwnd = user32.GetAncestor(root.winfo_id(), 2)  # GA_ROOT: the frame Tk wraps the window in
+    hwnd = toplevel_hwnd(root)
+    if not hwnd:
+        return
     for slot, metric, class_index in ((1, 11, -14), (0, 49, -34)):  # big: SM_CXICON, small: SM_CXSMICON
         size = user32.GetSystemMetrics(metric)
         icon = user32.LoadImageW(None, str(ico), 1, size, size, 0x10)  # IMAGE_ICON, LR_LOADFROMFILE
@@ -1360,6 +1544,7 @@ def window_icon(root, tk, own_ico, own_png):
             root.iconbitmap(str(own_ico))
             root.iconbitmap(default=str(own_ico))
             native_window_icons(root, own_ico)
+            native_dark_titlebar(root, BG)
             return None
         except tk.TclError:
             pass
@@ -1483,6 +1668,10 @@ class Launcher:
     def set_icon(self):
         self.icon = window_icon(self.root, self.tk, PORT_DIR / 'launcher' / 'spartanport.ico',
                                 PORT_DIR / 'launcher' / 'spartanport.png')
+        self.apply_dark_titlebar()
+
+    def apply_dark_titlebar(self):
+        native_dark_titlebar(self.root, BG)
 
     # ---- look --------------------------------------------------------------------------------
     def check_images(self):
@@ -1695,6 +1884,21 @@ class Launcher:
             self.ttk.Label(cell, text=_('restart'), style='Restart.TLabel').pack(side='left', padx=self.px((8, 0)))
         return cell
 
+    def ini_slider(self, parent, key, low, high, unit):
+        """A slider over an integer spartanport.ini setting, with its value and `unit` beside it."""
+        tk = self.tk
+        holder = self.ttk.Frame(parent)
+        amount = self.var(key, 'ini')
+        tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
+                 length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
+                 activebackground=ACCENT_HI, highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
+        value = self.ttk.Label(holder, width=7)
+        value.pack(side='left', padx=self.px(10))
+        show = lambda *_a: value.configure(text=f'{amount.get()}{unit}')
+        amount.trace_add('write', show)
+        show()
+        return holder
+
     def row(self, parent, title, widget, hint=None, restart=False):
         """Name on the left, control on the right, an optional note below."""
         r = self.next_row(parent)
@@ -1901,7 +2105,7 @@ class Launcher:
         monitor = ttk.Frame(quick)
         monitor.grid(row=2 + (len(items) + 1) // 2, column=0, columnspan=4, sticky='w', pady=self.px(6))
         ttk.Label(monitor, text=_('Monitor', 'Монитор')).pack(side='left', padx=self.px((0, 12)))
-        self.quick_monitor_box = self.choice(monitor, 'monitor', 'app', self.monitor_list)
+        self.quick_monitor_box = self.choice(monitor, 'monitor', 'ini', self.monitor_list)
         self.quick_monitor_box.pack(side='left')
 
     def draw_banner(self):
@@ -1965,25 +2169,18 @@ class Launcher:
             return self.banner_image.subsample(factor) if factor > 1 else self.banner_image
 
     def build_graphics(self):
-        """Window and overlay controls; temporal upscaling stays commented out."""
+        """Window and overlay controls, then the temporal upscaler."""
         f = self.scrolled_page('graphics', _('Graphics', 'Графика'), _('How the game appears on your screen.'))
         self.build_display(f)
-        # Temporal upscaling is parked until its image quality is validated.
-        # self.section(f, _('Experimental'))
-        # self.check(f, 'experimental_upscaler', 'app', _('Enable the upscaler (experimental)'),
-        #            _('Off (default): the game runs without temporal upscaling; FSR 3.1 and TAA need this switch on. '
-        #              'FSR 3.1 is not calibrated for this game yet: expect ghosting or flicker. The remaining options require this switch; '
-        #              'leave it off for normal gameplay.',
-        #              'Выкл. (по умолчанию): игра без временного апскейлинга; FSR 3.1 и TAA нужен этот переключатель. '
-        #              'FSR 3.1 ещё не откалиброван для этой игры: возможны гостинг и мерцание.'), restart=True)
-        # self.section(f, _('Upscaling', 'Апскейлинг'))
-        # self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS))
-        # self.row(f, _('Quality preset', 'Пресет'), self.choice(f, 'preset', 'ini', PRESETS),
-        #          _('Render scale per axis: Quality renders at 1/1.5 of the output size.',
-        #            'Масштаб рендера по каждой оси: Quality рисует в 1/1.5 размера вывода.'))
-        # self.row(f, _('Output resolution', 'Разрешение вывода'), self.choice(f, 'output_res', 'ini', OUTPUTS),
-        #          _('What the upscaler produces; the HUD is drawn at this size too.',
-        #            'Что выдаёт апскейлер; интерфейс рисуется в этом же размере.'))
+        self.section(f, _('Upscaling'))
+        self.check(f, 'experimental_upscaler', 'app', _('Enable the upscaler'),
+                   _('Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. '
+                     'Animated characters can still show some ghosting.'), restart=True)
+        self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS))
+        # The upscaler outputs the Render resolution chosen above; the preset renders below it.
+        self.row(f, _('Quality preset', 'Пресет'), self.choice(f, 'preset', 'ini', PRESETS),
+                 _('Share of the Render resolution above the game renders at; the upscaler rebuilds the full '
+                   'Render resolution. Lower renders faster. Native AA keeps the full resolution.'), restart=True)
         # self.row(f, _('Live resolution changes', 'Смена разрешения на лету'), self.choice(f, 'live_resolution', 'ini', LIVE),
         #          _('Off: outputs other than 1080p are set by a patch at start (fastest; changing them in the '
         #            'game restarts it). On: change output and preset in the game without a restart, at a cost.',
@@ -2010,14 +2207,19 @@ class Launcher:
                  _('Borderless covers the screen without changing the display mode.'))
         # Asked again whenever the box is drawn or opened (monitor_list), so a list refresh_monitors()
         # put in place is picked up without capturing the list once.
-        self.monitor_box = self.choice(f, 'monitor', 'app', self.monitor_list, width=46)
+        self.monitor_box = self.choice(f, 'monitor', 'ini', self.monitor_list, width=46)
         self.row(f, _('Monitor', 'Монитор'), self.monitor_box,
                  _('The screen the game opens its window on. Primary is the monitor the system considers the main one.',
                    'Экран, на котором игра открывает своё окно. Основной монитор определяется системой.'))
         self.check(f, 'vsync', 'ini', _('VSync'), _('Off allows tearing for the lowest latency.'))
-        self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
+        self.check(f, 'hdr', 'ini', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
                      'Если HDR включён в Windows и монитор его поддерживает.'))
+        self.section(f, _('Effects'))
+        self.check(f, 'motion_blur', 'ini', _('Motion blur'),
+                   _("The game's own motion blur on fast moving objects and the camera. Off removes it."))
+        self.check(f, 'depth_of_field', 'ini', _('Depth of field'),
+                   _("The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp."))
         self.section(f, _('Textures'))
         self.row(f, _('Anisotropic filtering'), self.choice(f, 'anisotropy', 'ini', ANISOTROPY),
                  _('Sharper floors and walls seen at an angle, at little cost on most graphics cards.'),
@@ -2027,8 +2229,7 @@ class Launcher:
                    _('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.'))
         self.section(f, _('Screenshots'))
         shots = self.ttk.Button(f, text=_('Open the screenshots folder'),
-                           command=lambda: self.open_path(
-                               Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user') / 'screenshots'))
+                           command=lambda: self.open_path(self.user_dir() / 'screenshots'))
         self.row(f, _('F12 in the game'), shots,
                  _("Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves."))
 
@@ -2150,7 +2351,8 @@ class Launcher:
         self.folder(f, 'user_dir', _('Saves folder', 'Папка сохранений'),
                     _('Choose the saves folder', 'Выберите папку сохранений'),
                     _('Empty: {} (shader caches are kept there too).',
-                      'Пусто: {} (там же кэш шейдеров).').format(DATA_DIR / 'user'), on_change=self.refresh_status)
+                      'Пусто: {} (там же кэш шейдеров).').format(os.environ.get('SPARTAN_USER_DIR') or DATA_DIR / 'user'), on_change=self.refresh_status)
+        # gport: the zip import (our addition): picks a save package and replaces the title's saves.
         self.build_save_import(f)
         self.section(f, _('Saves'))
         self.build_save_backups(f)
@@ -2164,10 +2366,17 @@ class Launcher:
                    'Действует при первом запуске игры. Потом игра хранит язык текста и речи в своём '
                    'сохранении настроек: меняйте их в игре, в Настройки → Параметры игры → Текст и '
                    'Настройки → Аудио → Речь.'))
+        self.section(f, _('Audio'))
+        self.row(f, _('Volume'), self.ini_slider(f, 'master_volume', 0, 200, '%'),
+                 _("Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft "
+                   "limiter so loud scenes do not clip. Also in the in-game menu."))
+        self.row(f, _('Speakers'), self.choice(f, 'audio_channels', 'ini', AUDIO_CHANNELS),
+                 _("Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. "
+                   "Applied when the game starts."), restart=True)
         self.build_patches(f)
 
     def user_dir(self):
-        return Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user')
+        return Path(self.var('user_dir', 'app').get() or os.environ.get('SPARTAN_USER_DIR') or DATA_DIR / 'user')
 
     # ---- trophies ----------------------------------------------------------------------------
     def build_trophies(self):
@@ -2507,6 +2716,8 @@ class Launcher:
         tk, ttk = self.tk, self.ttk
         f = self.scrolled_page('controls', _('Controls', 'Управление'),
                                _('Keyboard and mouse, button icons and gamepad mapping.'))
+        ttk.Button(f, text=_('Set up a controller'), command=self.open_controller_mapper).grid(
+            row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((8, 4)))
         saved = {kind: control_values(self.app.get('controls'), kind) for kind in ('key', 'pad')}
         style = self.app.get('pad_style') if self.app.get('pad_style') in PAD_STYLES else 'playstation'
         self.pad_style = tk.StringVar(value=style)
@@ -2532,30 +2743,29 @@ class Launcher:
                 button_icons.draw(game_icon, button_icons.GAME_BUTTONS[button], 'playstation', size)
             elif button in ('rage', 'grab'):  # two buttons together
                 button_icons.draw(game_icon, 'label:L3+R3' if button == 'rage' else 'label:L1+O', 'playstation', size)
+            elif button in ('weapon_next', 'weapon_prev'):  # a d-pad button, whichever weapon is next
+                button_icons.draw(game_icon, 'label:D-PAD', 'playstation', size)
+            elif button.startswith('move_'):
+                button_icons.draw(game_icon, 'leftstick', 'xbox', size)
             else:  # an action of the right stick (dodge): the stick icon labelled RS
                 button_icons.draw(game_icon, 'rightstick', 'xbox', size)
             title = _(PS_BUTTON_NAMES.get(button) or ACTION_NAMES[button])
             ttk.Label(table, text=title, width=-14).grid(row=r, column=1, sticky='w', padx=self.px((0, 12)))
 
         def slider(key, low, high, unit, parent=None):
-            holder = ttk.Frame(parent or f)
-            amount = self.var(key, 'ini')
-            tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
-                     length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
-                     activebackground=ACCENT_HI, highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
-            value = ttk.Label(holder, width=7)
-            value.pack(side='left', padx=self.px(10))
-            show = lambda *_a: value.configure(text=f'{amount.get()}{unit}')
-            amount.trace_add('write', show)
-            show()
-            return holder
+            return self.ini_slider(parent or f, key, low, high, unit)
 
         # The in-game icons first, then the device: its section is shown, the other hidden (show_device).
         page = f
-        self.row(page, _('In-game button icons'), self.choice(page, 'glyph_style', 'app', GLYPH_STYLES),
+        self.row(page, _('In-game button icons'), self.choice(page, 'glyph_style', 'ini', GLYPH_STYLES),
                  hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
                         'Works on a copy of up to three game files in the port\'s data folder (about 410 MB); your game folder '
                         'is never changed. Applied when the game starts.'))
+        self.check(page, 'switch_attacks', 'app', _('Switch attacks on L1 + d-pad and L1 + Cross'),
+                   _('L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos\' '
+                     'hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands '
+                     'instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the '
+                     'game starts.'))
         saved_device = self.app.get('controls_device')
         self.device = tk.StringVar(value=saved_device if saved_device in dict(CONTROL_DEVICES) else 'keyboard')
         self.device_chosen = saved_device in dict(CONTROL_DEVICES)
@@ -2583,7 +2793,7 @@ class Launcher:
             if button == 'rage':
                 ttk.Checkbutton(table, text=_('Rage of Sparta on one input (L3 + R3 together)'),
                                 variable=self.var('rage_one_input', 'app')).grid(
-                    row=r, column=0, columnspan=4, sticky='w', pady=self.px((6, 6)))
+                    row=r, column=0, columnspan=5, sticky='w', pady=self.px((6, 6)))
                 r += 1
             default = default_input(row, 'key')
             game_button(table, r, button)
@@ -2594,22 +2804,25 @@ class Launcher:
             arrow = ttk.Button(table, text='\u21a9', width=3, takefocus=False,
                                command=lambda b=button, d=default: self.assign_key('key', b, d))
             arrow.grid(row=r, column=3, sticky='w', padx=self.px((6, 0)))
-            self.key_rows[button] = (box, arrow)
+            clear = ttk.Button(table, text=_('Clear input'),
+                               command=lambda b=button: self.assign_key('key', b, 'None'))
+            clear.grid(row=r, column=4, sticky='w', padx=self.px((6, 0)))
+            self.key_rows[button] = (box, arrow, clear)
         self.var('rage_one_input', 'app').trace_add('write', lambda *_a: self.grey_rage_rows())
         self.grey_rage_rows()
         self.note(f, _('Click a box, then press a key, click a mouse button or turn the wheel (it gives up after '
                        '{} seconds). An input already used by another button swaps with it; the arrow puts one '
                        'button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above '
                        'it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the '
-                       'way you are moving (WASD), or back when standing still. Touchpad right opens the game\'s '
+                       'way you are moving, or back when standing still. Touchpad right opens the game\'s '
                        'pause menu. Insert always opens the port\'s menu and cannot be bound. Applied when the '
                        'game starts.').format(CAPTURE_SECONDS))
         ttk.Button(f, text=_('Reset keyboard & mouse to defaults'), command=lambda: self.reset_controls('key')).grid(
             row=self.next_row(f), column=0, sticky='w', pady=self.px((14, 0)))
         self.row(f, _('Joystick prompts'), self.choice(f, 'stick_prompts', 'app', STICK_PROMPTS),
-                 hint=_('How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns '
-                        'from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W '
-                        'or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.'))
+                 hint=_('Keyboard: enter the rotation with your movement inputs. With default keys, the sequences '
+                        'are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these '
+                        'inputs too. Adaptive mouse: draw the turn with the mouse.'))
         self.row(f, _('Mouse prompt distance'), slider('mouse_prompt_distance', 16, 200, ' px'),
                  _('Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.'))
         self.row(f, _('Right stick style'), self.choice(f, 'mouse_aim_style', 'ini', AIM_STYLES),
@@ -2636,6 +2849,10 @@ class Launcher:
                             command=self.relabel_pad_controls).pack(side='left', padx=self.px((0, 14)))
         self.row(f, _('Controller type'), names)
         self.row(f, _('Vibration'), slider('vibration', 0, 100, '%', f), _("Strength of the gamepad's vibration; 0% turns it off."))
+        self.row(f, 'Menu confirmation', self.choice(f, 'menu_confirm_swap', 'ini', MENU_CONFIRM_STYLES),
+                 hint='Which button confirms choices in save/load dialogs and menu lists. '
+                      'Default: Cross confirms, Circle cancels. Swapped: Circle confirms, Cross cancels. '
+                      'Does not change gameplay or combat controls.')
         table = mapping_table(f)
         for r, (button, _key, pad) in enumerate(CONTROLS, start=1):
             game_button(table, r, button)
@@ -2755,6 +2972,19 @@ class Launcher:
         if other:
             table[other].set(bindings[other])
         table[button].set(name)
+
+    def open_controller_mapper(self):
+        if self.process and self.process.poll() is None:
+            self.messagebox.showinfo(_('Set up a controller'), _('Stop the game before setting up a controller.'))
+            return
+        existing = getattr(self, 'controller_mapper_window', None)
+        if existing and not existing.closed:
+            existing.window.lift()
+            return
+        try:
+            self.controller_mapper_window = controller_mapper.MapperWindow(self.root, PORT_DIR, DATA_DIR, _)
+        except (OSError, ValueError) as error:
+            self.messagebox.showerror(_('Set up a controller'), _(str(error)))
 
     def draw_pad_icon(self, button):
         """The gamepad column's icon of a game button, in the chosen style (L2/R2: the triggers)."""
@@ -3206,6 +3436,7 @@ class Launcher:
         app['controls'] = {kind: control_changes({b: v.get() for b, v in vars_.items()}, kind)
                            for kind, vars_ in self.control_vars.items()}
         app['pad_style'] = self.pad_style.get()
+        app['menu_confirm_swap'] = ini.get('menu_confirm_swap', '0')
         if getattr(self, 'device_chosen', False):  # an untouched first choice stays automatic
             app['controls_device'] = self.device.get()
         mods = {'order': list(self.mod_order),
@@ -3640,7 +3871,7 @@ class Launcher:
                                                     'Закройте игру перед удалением кэша шейдеров.'))
             return
         import shutil
-        cache = Path(self.app['user_dir'] or DATA_DIR / 'user') / 'cache'
+        cache = Path(self.app['user_dir'] or os.environ.get('SPARTAN_USER_DIR') or DATA_DIR / 'user') / 'cache'
         size = sum(p.stat().st_size for p in cache.rglob('*') if p.is_file()) if cache.is_dir() else 0
         if not size:
             self.messagebox.showinfo(APP_NAME, _('The shader cache is already empty.', 'Кэш шейдеров уже пуст.'))
@@ -3773,7 +4004,7 @@ class GameJob:
 
 def run_log_path(settings):
     """<saves folder>/last_run.log: the game's output, written by both launch paths."""
-    return Path(settings.get('user_dir') or DATA_DIR / 'user') / 'last_run.log'
+    return Path(settings.get('user_dir') or os.environ.get('SPARTAN_USER_DIR') or DATA_DIR / 'user') / 'last_run.log'
 
 
 class _NullLog:

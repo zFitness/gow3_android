@@ -49,7 +49,12 @@ int main() {
     assert(call(stub, 0xffe, 1) == 0x2222);  // only GBL (provider 0) is extended
     assert(call(stub, 0xf00, 0) == reinterpret_cast<uintptr_t>(&native_provider));
     assert(call(stub, 0xf60, 0) == reinterpret_cast<uintptr_t>(&native_provider));
-    assert(call(stub, 0xf61, 0) == 0x1111);
+    assert(call(stub, 0xf70, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xfb0, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xf90, 1) == 0x2222);
+    assert(call(stub, 0xfc0, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xff7, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xff8, 0) == 0x1111);
     assert(call(stub, 0xeff, 0) == 0x1111);
     if (!__builtin_setjmp(back)) {
         call(stub, SPARTAN_MENU_EXIT_FUNCTION, 0);

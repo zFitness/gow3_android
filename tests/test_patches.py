@@ -17,6 +17,9 @@ from patches import (compile_patches, external_patches, external_selection, comp
                      game_profile, selected_patches, patch_profile_status, patch_requirements, compile_plan, publish_plan)
 
 GOW3 = ROOT / 'patches/God_of_War_III_Remastered_CUSA01623.xml'
+# gport: 上游的补丁集在 patches/CUSA01623.xml，我们按 title 拆成了 per-title 文件
+# （God_of_War_III_Remastered_<title id>.xml）⇒ 上游测试里的 SPARTAN 指向同一款游戏的我们那份。
+SPARTAN = GOW3
 SPARTAN_IDS = {'CUSA01623'}
 SEGMENTS = [(0, 0x6000000)]
 
@@ -110,9 +113,25 @@ class GameProfileTests(unittest.TestCase):
         self.assertEqual(selected_patches(GOW3, '01.02', 'Skip Any Video With X Button', only=True), ['Skip Any Video With X Button', STARTUP])
         self.assertEqual(selected_patches(GOW3, '01.02', '', only=True), [STARTUP])
 
-    def test_gow3_resolution_patch_replaces_texture_fix(self):
-        self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 4K'),
-                         ['Skip Any Video With X Button', STARTUP, 'Resolution Patch - 4K'])
+    def test_spartanport_defaults_and_extras(self):
+        self.assertEqual(selected_patches(SPARTAN, '01.02', ''),
+                         ['Bug Fix - Texture Corruption Fix', 'High FPS Wall Seam Fix', 'Skip Any Video With X Button',
+                          'Bug Fix - Startup Black Screen'])
+        self.assertEqual(selected_patches(SPARTAN, '01.02', 'Resolution Patch - 720p; Skip Any Video With X Button'),
+                         ['High FPS Wall Seam Fix', 'Skip Any Video With X Button', 'Bug Fix - Startup Black Screen',
+                          'Resolution Patch - 720p'])
+        self.assertEqual(selected_patches(SPARTAN, '01.00', ''), [])
+        # The launcher's selection is exact: unchecked defaults stay off, except the fixes that are
+        # always on (a list saved before they existed must still get them).
+        self.assertEqual(selected_patches(SPARTAN, '01.02', 'Skip Any Video With X Button', only=True),
+                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen'])
+        self.assertEqual(selected_patches(SPARTAN, '01.02', '', only=True), ['Bug Fix - Startup Black Screen'])
+        self.assertEqual(selected_patches(SPARTAN, '01.00', '', only=True), [])
+
+    def test_spartanport_resolution_patch_replaces_texture_fix(self):
+        self.assertEqual(selected_patches(SPARTAN, '01.02', 'Resolution Patch - 4K'),
+                         ['High FPS Wall Seam Fix', 'Skip Any Video With X Button', 'Bug Fix - Startup Black Screen',
+                          'Resolution Patch - 4K'])
         with self.assertRaises(ValueError):
             selected_patches(GOW3, '01.02', 'Resolution Patch - 4K;Resolution Patch - 720p')
 

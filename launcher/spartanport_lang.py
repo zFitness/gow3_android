@@ -947,6 +947,13 @@ EXTRA = {
         'Graphics (experimental)': 'Gráficos (experimental)',
         'Experimental': 'Experimental',
         'Enable the upscaler (experimental)': 'Ativar o upscaler (experimental)',
+        'Enable the upscaler': 'Ativar o upscaler',
+        'Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Fração da resolução de renderização (página Desempenho) em que o jogo renderiza; o upscaler reconstrói essa resolução completa. Menor roda mais rápido. AA nativo mantém a resolução completa.',
+        'Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.': 'Desligado (padrão): o jogo roda sem upscaling temporal. Ligado: FSR 3.1 com o preset abaixo. Personagens animados ainda podem mostrar algum rastro.',
+        'Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Fração da resolução de renderização acima em que o jogo renderiza; o upscaler reconstrói essa resolução completa. Menor roda mais rápido. AA nativo mantém a resolução completa.',
+        'Native AA (100%)': 'AA nativo (100%)', 'Ultra Quality (77%)': 'Qualidade ultra (77%)',
+        'Quality (67%)': 'Qualidade (67%)', 'Balanced (59%)': 'Equilibrado (59%)',
+        'Performance (50%)': 'Desempenho (50%)', 'Ultra Performance (33%)': 'Desempenho máximo (33%)',
         'Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.': 'Desligado (padrão): o jogo roda sem upscaling temporal. Esses upscalers ainda não estão calibrados para este jogo: espere fantasmas (ghosting) ou cintilação. O FSR 3.1 não precisa de mais nada; o FSR 4 precisa dos assets abaixo e, sem eles, o jogo usa o FSR 3.1. As opções desta página só valem com este interruptor ligado.',
         'Add to Steam': 'Adicionar à Steam',
         'Steam is open. Close it completely (Steam > Exit) and click again: Steam rewrites its shortcuts when it closes.': 'A Steam está aberta. Feche-a por completo (Steam > Sair) e clique de novo: a Steam reescreve os atalhos quando fecha.',
@@ -1026,13 +1033,16 @@ EXTRA = {
             'Mira com o mouse enquanto L2 está pressionado (Cabeça de Hélio, Arco de Apolo). Relativo: o analógico segue o movimento e volta ao centro quando o mouse para. Absoluto: onde o mouse estava ao apertar L2 é o centro, e o analógico aponta dele até o mouse. Também no menu do jogo.',
         'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
             'Mira com o mouse enquanto L2 está pressionado: menor precisa de mais movimento do mouse para o mesmo analógico, maior de menos. Também no menu do jogo.',
-        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
-            'Clique em uma caixa e aperte uma tecla, clique com um botão do mouse ou gire a roda (desiste após {} segundos). Uma entrada já usada por outro botão troca com ele; a seta devolve um botão ao padrão. Rage of Sparta aperta L3 e R3 juntos: marque a caixa acima dele para usar uma entrada em vez de duas. Agarrar aperta L1 e Círculo juntos. A esquiva vai na direção em que você anda (WASD), ou para trás quando parado. O touchpad direito abre o menu de pausa do jogo. Insert sempre abre o menu do port e não pode ser atribuído. Aplicado ao iniciar o jogo.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Clique em uma caixa e aperte uma tecla, clique com um botão do mouse ou gire a roda (desiste após {} segundos). Uma entrada já usada por outro botão troca com ele; a seta devolve um botão ao padrão. Rage of Sparta aperta L3 e R3 juntos: marque a caixa acima dele para usar uma entrada em vez de duas. Agarrar aperta L1 e Círculo juntos. A esquiva vai na direção em que você anda, ou para trás quando parado. O touchpad direito abre o menu de pausa do jogo. Insert sempre abre o menu do port e não pode ser atribuído. Aplicado ao iniciar o jogo.',
         'Gamepad Mapping': 'Mapeamento do controle',
         'General': 'Geral',
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
             'Como os eventos de girar o analógico são respondidos. Teclado: digite o giro, meias-voltas a partir de cima D S A (horário) ou A S D, a partir de baixo A W D ou D W A, voltas completas D S A W ou A S D W; uma tecla fora de ordem recomeça. Mouse adaptativo: desenhe o giro com o mouse.',
         'Joystick prompts': 'Prompts do analógico',
+        'Switch attacks on L1 + d-pad and L1 + Cross': 'Ataques de troca com L1 + direcional e L1 + X',
+        "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.":
+            "L1 + uma direção do direcional troca para essa arma com o ataque de troca dela (a arma que já está na mão de Kratos repete o ataque). L1 + X faz o ataque de troca da arma na mão em vez de passar para a próxima arma. O direcional sozinho troca como antes. Aplicado ao iniciar o jogo.",
         'Keep the mouse in the game window': 'Manter o mouse na janela do jogo',
         'Key not supported': 'Tecla não suportada',
         'Keyboard & Mouse Mapping': 'Mapeamento de teclado e mouse',
@@ -1061,6 +1071,8 @@ EXTRA = {
         'Absolute': 'Absoluto',
         'Grab': 'Agarrar',
         'Dodge': 'Esquiva',
+        'Next weapon': 'Próxima arma',
+        'Previous weapon': 'Arma anterior',
         'Portuguese (Brazil)': 'Português (Brasil)',
         'Reuse compiled shaders from disk': 'Reutilizar shaders compilados do disco',
         'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Os shaders compilados em sessões anteriores carregam do cache de shaders em vez de compilar de novo: os objetos não aparecem mais alguns quadros atrasados depois de iniciar ou carregar um save, e o cache não é reescrito a cada sessão (o antivírus verifica cada arquivo gravado). A primeira inicialização com a opção ligada recria o cache uma vez. Desative se um objeto, efeito ou cor aparecer errado só depois de reiniciar e estiver certo na primeira execução de um cache novo.',
@@ -1250,6 +1262,13 @@ EXTRA = {
         'Graphics (experimental)': 'Gráficos (experimental)',
         'Experimental': 'Experimental',
         'Enable the upscaler (experimental)': 'Activar el escalador (experimental)',
+        'Enable the upscaler': 'Activar el escalador',
+        'Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Fracción de la resolución de renderizado (página Rendimiento) a la que el juego renderiza; el escalador reconstruye esa resolución completa. Menor es más rápido. AA nativo mantiene la resolución completa.',
+        'Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.': 'Desactivado (predet.): el juego funciona sin escalado temporal. Activado: FSR 3.1 con el preset de abajo. Los personajes animados aún pueden mostrar algo de estela.',
+        'Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Fracción de la resolución de renderizado de arriba a la que el juego renderiza; el escalador reconstruye esa resolución completa. Menor es más rápido. AA nativo mantiene la resolución completa.',
+        'Native AA (100%)': 'AA nativo (100%)', 'Ultra Quality (77%)': 'Calidad ultra (77%)',
+        'Quality (67%)': 'Calidad (67%)', 'Balanced (59%)': 'Equilibrado (59%)',
+        'Performance (50%)': 'Rendimiento (50%)', 'Ultra Performance (33%)': 'Rendimiento máximo (33%)',
         'Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.':
             'Desactivado (predeterminado): el juego corre sin escalado temporal. Estos escaladores aún no están calibrados para este juego: es posible que haya estelas (ghosting) o parpadeos. FSR 3.1 no necesita nada más; FSR 4 necesita los archivos de abajo y, sin ellos, el juego usa FSR 3.1. Las opciones de esta página solo surten efecto con este interruptor activado.',
         'Add to Steam': 'Añadir a Steam',
@@ -1310,13 +1329,16 @@ EXTRA = {
             'Apuntar con el ratón mientras mantienes L2 (Cabeza de Helios, Arco de Apolo). Relativo: el stick sigue el movimiento y vuelve al centro cuando el ratón se detiene. Absoluto: donde estaba el ratón al pulsar L2 es el centro, y el stick apunta desde él hasta el ratón. También en el menú del juego.',
         'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
             'Apuntar con el ratón mientras mantienes L2: más bajo necesita más movimiento del ratón para el mismo stick, más alto menos. También en el menú del juego.',
-        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
-            'Haz clic en una casilla y luego pulsa una tecla, haz clic con un botón del ratón o gira la rueda (se cancela tras {} segundos). Una entrada ya usada por otro botón se intercambia con él; la flecha devuelve un botón a su valor predeterminado. Rage of Sparta pulsa L3 y R3 a la vez: marca la casilla de encima para usar una entrada en lugar de dos. Agarrar pulsa L1 y Círculo a la vez. Esquivar evade hacia donde te mueves (WASD), o hacia atrás si estás quieto. El touchpad derecho abre el menú de pausa del juego. Insert siempre abre el menú del port y no se puede asignar. Se aplica al iniciar el juego.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Haz clic en una casilla y luego pulsa una tecla, haz clic con un botón del ratón o gira la rueda (se cancela tras {} segundos). Una entrada ya usada por otro botón se intercambia con él; la flecha devuelve un botón a su valor predeterminado. Rage of Sparta pulsa L3 y R3 a la vez: marca la casilla de encima para usar una entrada en lugar de dos. Agarrar pulsa L1 y Círculo a la vez. Esquivar evade hacia donde te mueves, o hacia atrás si estás quieto. El touchpad derecho abre el menú de pausa del juego. Insert siempre abre el menú del port y no se puede asignar. Se aplica al iniciar el juego.',
         'Gamepad Mapping': 'Asignación del mando',
         'General': 'General',
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
             'Cómo se responden los eventos de girar el stick. Teclado: escribe el giro, medias vueltas desde arriba D S A (horario) o A S D, desde abajo A W D o D W A, vueltas completas D S A W o A S D W; una tecla fuera de orden vuelve a empezar. Ratón adaptativo: dibuja el giro con el ratón.',
         'Joystick prompts': 'Eventos del stick',
+        'Switch attacks on L1 + d-pad and L1 + Cross': 'Ataques de cambio con L1 + cruceta y L1 + X',
+        "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.":
+            "L1 + una dirección de la cruceta cambia a esa arma con su ataque de cambio (el arma que Kratos ya tiene en la mano repite su ataque). L1 + X hace el ataque de cambio del arma en la mano en lugar de pasar a la siguiente arma. La cruceta sola cambia como antes. Se aplica al iniciar el juego.",
         'Keep the mouse in the game window': 'Mantener el ratón en la ventana del juego',
         'Key not supported': 'Tecla no compatible',
         'Keyboard & Mouse Mapping': 'Asignación de teclado y ratón',
@@ -1345,6 +1367,8 @@ EXTRA = {
         'Absolute': 'Absoluto',
         'Grab': 'Agarrar',
         'Dodge': 'Esquivar',
+        'Next weapon': 'Arma siguiente',
+        'Previous weapon': 'Arma anterior',
         'Portuguese (Brazil)': 'Portugués (Brasil)',
         'Reuse compiled shaders from disk': 'Reutilizar shaders compilados del disco',
         'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Los shaders compilados en sesiones anteriores se cargan de la caché de shaders en vez de compilarse de nuevo: los objetos ya no aparecen unos fotogramas tarde al iniciar o cargar una partida, y la caché no se reescribe en cada sesión (el antivirus revisa cada archivo escrito). El primer inicio con la opción activada reconstruye la caché una vez. Desactívalo si un objeto, efecto o color se ve mal solo después de reiniciar y está bien en la primera ejecución de una caché nueva.',
@@ -1528,6 +1552,50 @@ EXTRA['es'].update({
     'Shows the render resolutions of this shape only.': 'Muestra solo las resoluciones de render de esta proporción.',
 })
 
+EXTRA['pt'].update({
+    'Audio': 'Áudio',
+    'Volume': 'Volume',
+    'Speakers': 'Alto-falantes',
+    'Stereo': 'Estéreo',
+    '5.1 surround': 'Surround 5.1',
+    '7.1 surround': 'Surround 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volume geral do áudio do jogo. 100% é a mixagem original do jogo; mais é mais alto, com um limitador suave para que cenas altas não distorçam. Também no menu do jogo.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Formato em que a mixagem 7.1 do jogo é enviada. Automático segue o seu dispositivo de som: estéreo, 5.1 ou 7.1. Aplicado quando o jogo inicia.',
+})
+EXTRA['es'].update({
+    'Audio': 'Audio',
+    'Volume': 'Volumen',
+    'Speakers': 'Altavoces',
+    'Stereo': 'Estéreo',
+    '5.1 surround': 'Envolvente 5.1',
+    '7.1 surround': 'Envolvente 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volumen general del audio del juego. 100% es la mezcla original del juego; más es más alto, con un limitador suave para que las escenas fuertes no distorsionen. También en el menú del juego.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Formato en que se envía la mezcla 7.1 del juego. Automático sigue tu dispositivo de sonido: estéreo, 5.1 o 7.1. Se aplica al iniciar el juego.',
+})
+
+EXTRA['pt'].update({
+    'Effects': 'Efeitos',
+    'Motion blur': 'Desfoque de movimento',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        'O desfoque de movimento do próprio jogo em objetos rápidos e na câmera. Desligado, ele é removido.',
+    'Depth of field': 'Profundidade de campo',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'O desfoque do próprio jogo em objetos distantes, mais forte nas cenas. Desligado, a imagem inteira fica nítida.',
+})
+EXTRA['es'].update({
+    'Effects': 'Efectos',
+    'Motion blur': 'Desenfoque de movimiento',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        'El desenfoque de movimiento del propio juego en objetos rápidos y en la cámara. Desactivado, se elimina.',
+    'Depth of field': 'Profundidad de campo',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'El desenfoque del propio juego en objetos lejanos, más fuerte en las escenas. Desactivado, toda la imagen se ve nítida.',
+})
+
 EXTRA['pt'].update({'Polish': 'Polonês'})
 EXTRA['es'].update({'Polish': 'Polaco'})
 for _lang, _text in (('pl', 'Polski'), ('fr', 'Polonais'), ('de', 'Polnisch'),
@@ -1598,7 +1666,7 @@ EXTRA.setdefault('zh', {}).update({'   (game patches)': '   （游戏补丁）',
  'Choose two separate folders for the game and its update, or leave the update folder empty.': '游戏和更新请选择两个不同目录，或将更新目录留空。',
  'Choose your game folder to play.': '请选择游戏目录以开始游玩。',
  'Circle': '圆圈',
- "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.": '点击输入框后按键、点击鼠标按钮或滚动滚轮（{} '
+ "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.": '点击输入框后按键、点击鼠标按钮或滚动滚轮（{} '
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    '秒后自动取消）。已被使用的输入会与原绑定互换；箭头可单独恢复默认绑定。斯巴达之怒同时按下 '
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    'L3 '
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    '和 '
@@ -1634,6 +1702,16 @@ EXTRA.setdefault('zh', {}).update({'   (game patches)': '   （游戏补丁）',
  'Dodge': '闪避',
  'Drop a mod folder or .zip in the mods folder.': '将模组文件夹或 .zip 放入模组目录。',
  'Enable the upscaler (experimental)': '启用超分辨率（实验性）',
+ 'Enable the upscaler': '启用超分辨率',
+ 'Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': '游戏以渲染分辨率（性能页面）的这一比例渲染，超分辨率重建完整渲染分辨率。越低越快。原生抗锯齿保持完整分辨率。',
+ 'Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.': '默认关闭，游戏不使用时域超分辨率。开启：使用下方预设的 FSR 3.1。动画角色仍可能有少量拖影。',
+ 'Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': '游戏以上方渲染分辨率的这一比例渲染，超分辨率重建完整渲染分辨率。越低越快。原生抗锯齿保持完整分辨率。',
+ 'Native AA (100%)': '原生抗锯齿 (100%)',
+ 'Ultra Quality (77%)': '超高质量 (77%)',
+ 'Quality (67%)': '质量 (67%)',
+ 'Balanced (59%)': '平衡 (59%)',
+ 'Performance (50%)': '性能 (50%)',
+ 'Ultra Performance (33%)': '超高性能 (33%)',
  'Engine frame rate': '引擎帧率',
  'Enlarges a smaller game image to the window. With Render resolution 720p (Performance) it raises the FPS; at the size of the window it does nothing.': '将较低分辨率的游戏画面放大到窗口大小。渲染分辨率设为 '
                                                                                                                                                          '720p '
@@ -2351,7 +2429,7 @@ EXTRA.setdefault('id', {}).update({
     'Choose two separate folders for the game and its update, or leave the update folder empty.':
         'Pilih dua folder terpisah untuk game dan pembaruannya, atau biarkan folder pembaruan kosong.',
     'Choose your game folder to play.': 'Pilih folder game Anda untuk bermain.',
-    "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+    "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
         "Klik kotak, lalu tekan tombol, klik tombol mouse, atau putar roda mouse (waktu habis setelah {} detik). Input yang sudah digunakan oleh tombol lain akan ditukar; panah mengembalikan tombol ke default-nya. Rage of Sparta menekan L3 dan R3 bersamaan: centang kotak di atasnya untuk memakai satu input saja. Grab menekan L1 dan Lingkaran bersamaan. Dodge menghindar ke arah gerakan Anda (WASD), atau mundur jika diam. Touchpad kanan membuka menu jeda game. Insert selalu membuka menu port dan tidak dapat diubah. Diterapkan saat game dimulai.",
     'Close the game before restoring saves.': 'Tutup game sebelum memulihkan simpanan.',
     'Controls': 'Kontrol',
@@ -2365,6 +2443,16 @@ EXTRA.setdefault('id', {}).update({
     'Delete': 'Hapus',
     'Diagnostics (for development)': 'Diagnostik (untuk pengembangan)',
     'Enable the upscaler (experimental)': 'Aktifkan upscaler (eksperimental)',
+    'Enable the upscaler': 'Aktifkan upscaler',
+    'Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Bagian dari resolusi render (halaman Performa) yang dipakai game untuk merender; upscaler membangun ulang resolusi render penuh. Lebih rendah lebih cepat. Native AA memakai resolusi penuh.',
+    'Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.': 'Mati (bawaan): game berjalan tanpa upscaling temporal. Nyala: FSR 3.1 dengan preset di bawah. Karakter yang bergerak masih bisa sedikit berbayang.',
+    'Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Bagian dari resolusi render di atas yang dipakai game untuk merender; upscaler membangun ulang resolusi render penuh. Lebih rendah lebih cepat. Native AA memakai resolusi penuh.',
+    'Native AA (100%)': 'Native AA (100%)',
+    'Ultra Quality (77%)': 'Kualitas Ultra (77%)',
+    'Quality (67%)': 'Kualitas (67%)',
+    'Balanced (59%)': 'Seimbang (59%)',
+    'Performance (50%)': 'Performa (50%)',
+    'Ultra Performance (33%)': 'Performa Ultra (33%)',
     'Experimental': 'Eksperimental',
     'F11 captures a frame for analysis': 'F11 menangkap satu frame untuk analisis',
     'Files': 'File',
@@ -2488,6 +2576,206 @@ EXTRA['id'].update({
     'The package holds: {}': 'Paket berisi: {}',
     'The package is for {}, but the game folder is {}. Import it anyway?': 'Paket untuk {}, tetapi folder game adalah {}. Tetap impor?',
     'The previous saves are in the backup {}.': 'Simpanan sebelumnya ada di cadangan {}.',
+})
+
+# The weapon cycle rows of the keyboard table.
+EXTRA['zh'].update({'Next weapon': '下一把武器', 'Previous weapon': '上一把武器'})
+EXTRA['id'].update({'Next weapon': 'Senjata berikutnya', 'Previous weapon': 'Senjata sebelumnya'})
+
+EXTRA['pt'].update({
+    'Move forward': 'Mover para frente', 'Move backward': 'Mover para trás',
+    'Move left': 'Mover para a esquerda', 'Move right': 'Mover para a direita',
+    'Right stick up': 'Analógico direito para cima', 'Right stick down': 'Analógico direito para baixo',
+    'Right stick left': 'Analógico direito para a esquerda', 'Right stick right': 'Analógico direito para a direita',
+    'Clear input': 'Limpar entrada',
+    'Keyboard: enter the rotation with your movement inputs. With default keys, the sequences '
+    'are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these '
+    'inputs too. Adaptive mouse: draw the turn with the mouse.':
+        'Teclado: faça a rotação com suas entradas de movimentação. Com as teclas padrão, as sequências '
+        'são A W D / D W A, D S A / A S D e D S A W / A S D W. Remapear a movimentação também altera '
+        'essas entradas. Mouse adaptativo: desenhe a rotação com o mouse.',
+})
+EXTRA['es'].update({
+    'Move forward': 'Mover hacia delante', 'Move backward': 'Mover hacia atrás',
+    'Move left': 'Mover a la izquierda', 'Move right': 'Mover a la derecha',
+    'Right stick up': 'Stick derecho hacia arriba', 'Right stick down': 'Stick derecho hacia abajo',
+    'Right stick left': 'Stick derecho a la izquierda', 'Right stick right': 'Stick derecho a la derecha',
+    'Clear input': 'Borrar entrada',
+    'Keyboard: enter the rotation with your movement inputs. With default keys, the sequences '
+    'are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these '
+    'inputs too. Adaptive mouse: draw the turn with the mouse.':
+        'Teclado: introduce la rotación con tus entradas de movimiento. Con las teclas predeterminadas, '
+        'las secuencias son A W D / D W A, D S A / A S D y D S A W / A S D W. Reasignar el movimiento '
+        'también cambia estas entradas. Ratón adaptativo: dibuja la rotación con el ratón.',
+})
+
+EXTRA['zh'].update({
+    'Move forward': '向前移动', 'Move backward': '向后移动',
+    'Move left': '向左移动', 'Move right': '向右移动',
+    'Right stick up': '右摇杆向上', 'Right stick down': '右摇杆向下',
+    'Right stick left': '右摇杆向左', 'Right stick right': '右摇杆向右',
+    'Clear input': '清除绑定',
+    'Keyboard: enter the rotation with your movement inputs. With default keys, the sequences '
+    'are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these '
+    'inputs too. Adaptive mouse: draw the turn with the mouse.':
+        '键盘：使用移动绑定输入旋转。默认按键序列为 A W D / D W A、D S A / A S D 和 D S A W / A S D W。'
+        '重新绑定移动按键后，这些输入也会随之改变。自适应鼠标：用鼠标画出旋转。',
+})
+EXTRA['id'].update({
+    'Move forward': 'Bergerak maju', 'Move backward': 'Bergerak mundur',
+    'Move left': 'Bergerak ke kiri', 'Move right': 'Bergerak ke kanan',
+    'Right stick up': 'Stik kanan ke atas', 'Right stick down': 'Stik kanan ke bawah',
+    'Right stick left': 'Stik kanan ke kiri', 'Right stick right': 'Stik kanan ke kanan',
+    'Clear input': 'Hapus input',
+    'Keyboard: enter the rotation with your movement inputs. With default keys, the sequences '
+    'are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these '
+    'inputs too. Adaptive mouse: draw the turn with the mouse.':
+        'Keyboard: masukkan putaran dengan input gerakan Anda. Dengan tombol default, urutannya adalah '
+        'A W D / D W A, D S A / A S D dan D S A W / A S D W. Mengubah pemetaan gerakan juga mengubah '
+        'input ini. Mouse adaptif: gambar putaran dengan mouse.',
+})
+
+EXTRA.setdefault('pt', {}).update({
+    'Choose Configure next to a control. Each change is saved immediately.':
+        'Clique em Configurar ao lado de um comando. Cada alteração é salva na hora.',
+    'Game control': 'Comando no jogo', 'Assigned input': 'Entrada do controle',
+    'Configure': 'Configurar', 'Clear': 'Limpar', 'Close': 'Fechar',
+    'Cancel capture': 'Cancelar captura', 'Listening…': 'Aguardando…',
+    'Not configured': 'Não configurado', 'Button {}': 'Botão {}',
+    'D-pad {}: {}': 'Direcional {}: {}', 'Axis {} ({})': 'Eixo {} ({})',
+    'Left stick horizontal': 'Analógico esquerdo , horizontal',
+    'Left stick vertical': 'Analógico esquerdo , vertical',
+    'Right stick horizontal': 'Analógico direito , horizontal',
+    'Right stick vertical': 'Analógico direito , vertical',
+    'Configure any control, in any order.': 'Configure qualquer comando, na ordem que preferir.',
+    'Saved changes are kept when you close this window.':
+        'As alterações salvas são mantidas ao fechar esta janela.',
+    'Hold the input briefly. It will be saved for this control only.':
+        'Mantenha a entrada por um instante. Ela será salva apenas para este comando.',
+    'Saved: {}': 'Salvo: {}',
+    'Capture canceled. Previously saved changes are kept.':
+        'Captura cancelada. As alterações já salvas foram mantidas.',
+    'The change was not saved. Configure the control again to retry.':
+        'A alteração não foi salva. Configure o comando novamente para tentar de novo.',
+    'That input is assigned to another control. Clear its row first or choose another input.':
+        'Essa entrada já está em outro comando. Limpe a linha dele ou escolha outra entrada.',
+    'Set up a controller': 'Configurar um controle',
+    'Connect your controller, select it, then choose Start mapping.':
+        'Conecte seu controle, selecione-o e clique em Iniciar mapeamento.',
+    'Start mapping': 'Iniciar mapeamento',
+    'Save mapping': 'Salvar mapeamento',
+    'Back': 'Voltar', 'Skip': 'Pular', 'Cancel': 'Cancelar',
+    'No controller found. Connect it and choose Refresh.':
+        'Nenhum controle encontrado. Conecte-o e clique em Atualizar.',
+    '{} buttons, {} axes, {} D-pad hats': '{} botões, {} eixos, {} direcionais',
+    'Release all buttons and let the sticks rest.':
+        'Solte todos os botões e deixe os analógicos em repouso.',
+    'Release all buttons and the D-pad before starting.':
+        'Solte todos os botões e o direcional antes de começar.',
+    'Step {} of {}': 'Etapa {} de {}',
+    'Press {}': 'Pressione {}',
+    'Cross / A': 'X / A', 'Circle / B': 'Círculo / B',
+    'Square / X': 'Quadrado / X', 'Triangle / Y': 'Triângulo / Y',
+    'Release the previous input before continuing.': 'Solte o comando anterior para continuar.',
+    'Hold the requested input briefly. Skip controls your device does not have.':
+        'Mantenha o comando solicitado por um instante. Pule os comandos que seu controle não possui.',
+    'That input is already mapped. Use another input or skip this step.':
+        'Esse comando já foi mapeado. Use outro ou pule esta etapa.',
+    'Map Cross / A before saving.': 'Mapeie X / A antes de salvar.',
+    'Test your controller': 'Teste seu controle',
+    'Mapping complete': 'Mapeamento concluído',
+    'Press buttons and move the sticks to check them. Then choose Save mapping.':
+        'Aperte os botões e mova os analógicos para conferir. Depois clique em Salvar mapeamento.',
+    'Pressed: {}': 'Pressionado: {}',
+    'Left stick: {} / {}   Right stick: {} / {}\nL2: {}   R2: {}':
+        'Analógico esquerdo: {} / {}   Direito: {} / {}\nL2: {}   R2: {}',
+    'D-pad up': 'Direcional para cima', 'D-pad down': 'Direcional para baixo',
+    'D-pad left': 'Direcional para a esquerda', 'D-pad right': 'Direcional para a direita',
+    'Move the left stick to the right': 'Mova o analógico esquerdo para a direita',
+    'Move the left stick down': 'Mova o analógico esquerdo para baixo',
+    'Move the right stick to the right': 'Mova o analógico direito para a direita',
+    'Move the right stick down': 'Mova o analógico direito para baixo',
+    'Controller disconnected. Reconnect it and choose Refresh.':
+        'O controle foi desconectado. Reconecte-o e clique em Atualizar.',
+    'Could not save mapping': 'Não foi possível salvar o mapeamento',
+    'Controller ready': 'Controle pronto',
+    'Mapping saved for the next game start. Any game button remapping in Controls still applies.':
+        'Mapeamento salvo para a próxima inicialização. Os remapeamentos de botões na seção Controles continuam valendo.',
+    'Stop the game before setting up a controller.': 'Feche o jogo antes de configurar um controle.',
+    'SDL3 was not found. Use a complete port installation or build the project first.':
+        'A SDL3 não foi encontrada. Use uma instalação completa do port ou compile o projeto primeiro.',
+})
+
+EXTRA.setdefault('es', {}).update({
+    'Set up a controller': 'Configurar un mando',
+    'Stop the game before setting up a controller.': 'Cierra el juego antes de configurar un mando.',
+})
+
+EXTRA.setdefault('pt', {}).update({
+    'FSR 4.1 (AMD driver)': 'FSR 4.1 (driver AMD)',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 exige AMD Adrenalin 26.10.1 ou mais recente. O registro mostra o provedor ativo; usar FSR 3.1 como alternativa não significa FSR 4.1 ativo.',
+    'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Desligado (padrão): sem upscaling temporal. Ligado: usa o upscaler e a predefinição selecionados. Personagens animados ainda podem mostrar algum rastro.',
+})
+EXTRA.setdefault('es', {}).update({
+    'FSR 4.1 (AMD driver)': 'FSR 4.1 (controlador AMD)',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 requiere AMD Adrenalin 26.10.1 o posterior. El registro muestra el proveedor activo; usar FSR 3.1 como alternativa no significa que FSR 4.1 esté activo.',
+    'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Desactivado (predeterminado): sin escalado temporal. Activado: usa el escalador y el ajuste seleccionados. Los personajes animados aún pueden mostrar estelas.',
+})
+EXTRA.setdefault('zh', {}).update({
+    'FSR 4.1 (AMD driver)': 'FSR 4.1（AMD 驱动）',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 需要 AMD Adrenalin 26.10.1 或更新版本。日志会显示实际使用的提供程序；回退至 FSR 3.1 并不表示 FSR 4.1 已启用。',
+    'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': '默认关闭：不使用时域超分辨率。开启：使用所选超分辨率和预设。动画角色仍可能出现拖影。',
+})
+EXTRA.setdefault('id', {}).update({
+    'FSR 4.1 (AMD driver)': 'FSR 4.1 (driver AMD)',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 memerlukan AMD Adrenalin 26.10.1 atau lebih baru. Log menampilkan penyedia aktif; fallback ke FSR 3.1 bukan berarti FSR 4.1 aktif.',
+    'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Mati (bawaan): tanpa upscaling temporal. Nyala: memakai upscaler dan preset pilihan. Karakter yang bergerak masih dapat berbayang.',
+})
+
+EXTRA['zh'].update({
+    'Audio': '音频',
+    'Volume': '音量',
+    'Speakers': '扬声器',
+    'Stereo': '立体声',
+    '5.1 surround': '5.1 环绕声',
+    '7.1 surround': '7.1 环绕声',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        '游戏音频的主音量。100% 为游戏自带的混音；调高会更响亮，并带有软限幅，避免嘈杂场景出现削波失真。游戏内菜单中也有此选项。',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        '游戏的 7.1 混音输出所用的声道布局。“自动”会跟随你的声音设备：立体声、5.1 或 7.1。游戏启动时生效。',
+})
+
+EXTRA['id'].update({
+    'Audio': 'Audio',
+    'Volume': 'Volume',
+    'Speakers': 'Speaker',
+    'Stereo': 'Stereo',
+    '5.1 surround': 'Surround 5.1',
+    '7.1 surround': 'Surround 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volume utama audio game. 100% adalah campuran asli game; lebih tinggi berarti lebih keras, dengan pembatas lembut agar adegan yang keras tidak terpotong (clipping). Tersedia juga di menu dalam game.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Tata letak saluran untuk campuran 7.1 game. Otomatis mengikuti perangkat suara Anda: stereo, 5.1, atau 7.1. Diterapkan saat game dimulai.',
+})
+
+EXTRA['zh'].update({
+    'Effects': '画面效果',
+    'Motion blur': '动态模糊',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        '游戏自带的动态模糊（快速移动的物体和镜头）。关闭后将其移除。',
+    'Depth of field': '景深',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        '游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。',
+})
+
+EXTRA['id'].update({
+    'Effects': 'Efek',
+    'Motion blur': 'Motion blur',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        'Motion blur bawaan game pada objek yang bergerak cepat dan kamera. Jika dimatikan, efek ini dihilangkan.',
+    'Depth of field': 'Depth of field',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'Blur bawaan game pada objek yang jauh, paling kuat di cutscene. Jika dimatikan, seluruh gambar tetap tajam.',
 })
 
 _tables = {}

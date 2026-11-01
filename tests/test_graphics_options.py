@@ -9,6 +9,46 @@ import graphics_options as g
 
 
 class GraphicsOptionsTest(unittest.TestCase):
+    def test_glyphs_and_anisotropy_survive_restart_and_recover_after_failure(self):
+        options, _ = g.prepare(self.ini, self.state, environment={'SPARTAN_GLYPH_STYLE': 'xbox'})
+        self.assertEqual(options['glyph_style'], 'xbox')
+        g.write_keys(self.ini, {'glyph_style': 'keyboard', 'anisotropy': '16', 'restart_unconfirmed': '1'})
+        options, reverted = g.prepare(self.ini, self.state, environment={'SPARTAN_GLYPH_STYLE': 'xbox'})
+        self.assertFalse(reverted)
+        self.assertEqual(g.environment(options)['SPARTAN_GLYPH_STYLE'], 'keyboard')
+        self.assertEqual(g.environment(options)['SPARTAN_ANISOTROPY'], '16')
+        restored, reverted = g.prepare(self.ini, self.state)
+        self.assertTrue(reverted)
+        self.assertEqual((restored['glyph_style'], restored['anisotropy']), ('xbox', '0'))
+
+    def test_invalid_glyphs_and_anisotropy_fall_back_to_defaults(self):
+        options = g.startup_options({'glyph_style': 'bad', 'anisotropy': '3'})
+        self.assertEqual((options['glyph_style'], options['anisotropy']), ('off', '0'))
+
+    def test_monitor_and_hdr_are_shared_and_recovered_after_a_failed_restart(self):
+        self.ini.write_text('monitor=0\nhdr=0\n', encoding='utf-8')
+        good, _ = g.prepare(self.ini, self.state)
+        self.assertEqual(g.environment(good)['SPARTAN_MONITOR'], '0')
+        g.write_keys(self.ini, {'monitor': '2', 'hdr': '1', 'restart_unconfirmed': '1'})
+        tried, reverted = g.prepare(self.ini, self.state)
+        self.assertFalse(reverted)
+        self.assertEqual(g.environment(tried)['SPARTAN_HDR'], '1')
+        restored, reverted = g.prepare(self.ini, self.state)
+        self.assertTrue(reverted)
+        self.assertEqual((restored['monitor'], restored['hdr']), ('0', '0'))
+
+    def test_legacy_launch_choices_are_migrated_once_and_ini_wins_on_restart(self):
+        options, _ = g.prepare(self.ini, self.state, environment={'SPARTAN_MONITOR': '2', 'SPARTAN_HDR': '1'})
+        self.assertEqual((options['monitor'], options['hdr']), ('2', '1'))
+        g.write_keys(self.ini, {'monitor': '0', 'hdr': '0'})
+        options, _ = g.prepare(self.ini, self.state, environment={'SPARTAN_MONITOR': '2', 'SPARTAN_HDR': '1'})
+        self.assertEqual((options['monitor'], options['hdr']), ('0', '0'))
+
+    def test_invalid_monitor_and_hdr_fall_back_safely(self):
+        for value in ('-1', 'bad', '2147483648', '1' * 100, '²'):
+            self.assertEqual(g.startup_options({'monitor': value})['monitor'], '')
+        self.assertEqual(g.startup_options({'hdr': 'bad'})['hdr'], '0')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.ini = Path(self.temp.name) / 'spartanport.ini'
@@ -32,6 +72,10 @@ class GraphicsOptionsTest(unittest.TestCase):
                 'deferred_readback': '1',
                 'stale_readback': '1',
                 'async_shaders': '1',
+                'monitor': '',
+                'hdr': '0',
+                'glyph_style': 'off',
+                'anisotropy': '0',
             },
         )
 
@@ -270,6 +314,10 @@ class GraphicsOptionsTest(unittest.TestCase):
                 'SPARTAN_DEFERRED_READBACK': '1',
                 'SPARTAN_STALE_READBACK': '0',
                 'SPARTAN_ASYNC_SHADERS': '1',
+                'SPARTAN_MONITOR': '',
+                'SPARTAN_HDR': '0',
+                'SPARTAN_GLYPH_STYLE': 'off',
+                'SPARTAN_ANISOTROPY': '0',
             },
         )
 
@@ -361,6 +409,61 @@ class SteamDeckTest(unittest.TestCase):
         self.assertIn(g.STEAM_DECK_RESOLUTION, g.TESTED_RESOLUTIONS)
         self.assertEqual(g.aspect_of(g.STEAM_DECK_RESOLUTION), '16:10')
 
+    def test_upscale_render_size_follows_the_preset_scale(self):
+        # Native AA (0), Quality (1), Balanced (2), Performance (3), Ultra Performance (4), Ultra Quality (5)
+        self.assertEqual(g.upscale_render_size(1, (1920, 1080)), (1280, 720))
+        self.assertEqual(g.upscale_render_size(2, (1920, 1080)), (1130, 636))
+        self.assertEqual(g.upscale_render_size(3, (1920, 1080)), (960, 540))
+        self.assertEqual(g.upscale_render_size(4, (1920, 1080)), (640, 360))
+        self.assertEqual(g.upscale_render_size(5, (1920, 1080)), (1476, 830))
+        self.assertEqual(g.upscale_render_size(4, (1280, 720)), (640, 360))
+        for preset in range(6):
+            w, h = g.upscale_render_size(preset, (2560, 1440))
+            self.assertEqual((w % 2, h % 2), (0, 0))
+        self.assertIsNone(g.upscale_render_size(9, (1920, 1080)))
+        self.assertIsNone(g.upscale_render_size('x', (1920, 1080)))
+
+    def test_upscale_render_size_goes_above_the_games_1080p(self):
+        self.assertEqual(g.upscale_render_size(5, (2560, 1440)), (1970, 1108))
+        self.assertEqual(g.upscale_render_size(1, (3840, 2160)), (2560, 1440))
+        self.assertEqual(g.upscale_render_size(5, (3840, 2160)), (2954, 1662))
+
+    def test_the_scene_is_never_the_display_size(self):
+        # At the game's own 1920x1080 (or the output size) the game composites straight into the
+        # display buffer, before the upscaler can run: 2 pixels short instead.
+        self.assertEqual(g.upscale_render_size(0, (1920, 1080)), (1918, 1078))
+        self.assertEqual(g.upscale_render_size(0, (2560, 1440)), (2558, 1438))
+        self.assertEqual(g.upscale_render_size(0, (3840, 2160)), (3838, 2158))
+        self.assertEqual(g.upscale_render_size(3, (3840, 2160)), (1918, 1078))
+
+    def test_upscaler_output_is_the_chosen_render_resolution(self):
+        on = {'SPARTAN_EXPERIMENTAL_UPSCALER': '1'}
+        ini = {'upscaler': 'fsr3', 'preset': '1', 'render_resolution': '1440p', 'output_res': '1280x720'}
+        self.assertEqual(g.upscaler_render_size(ini, on), (1706, 960, (2560, 1440)))
+        self.assertEqual(g.upscaler_render_size({**ini, 'render_resolution': 'native'}, on), (1280, 720, (1920, 1080)))
+        self.assertEqual(g.upscaler_render_size({**ini, 'preset': '0'}, on), (2558, 1438, (2560, 1440)))
+        self.assertIsNone(g.upscaler_render_size(ini, {}))
+        self.assertIsNone(g.upscaler_render_size({**ini, 'upscaler': 'off'}, on))
+
+    def test_resolution_patch_for_any_size_matches_the_built_in_ones(self):
+        builtin = (Path(__file__).resolve().parents[1] / 'patches' / 'CUSA01623.xml').read_text(encoding='utf-8')
+        lines = lambda text: re.findall(r'<Line [^>]*/>', text)
+        for name, size in (('720p', (1280, 720)), ('1440p', (2560, 1440)), ('4K', (3840, 2160)),
+                           ('8K', (7680, 4320))):
+            block = re.search(rf'Name="Resolution Patch - {name}".*?</Metadata>', builtin, re.S)
+            self.assertEqual(lines(g.resolution_patch_xml(*size)), lines(block.group(0)), name)
+        self.assertIn('Name="Resolution Patch - 1280x720"', g.resolution_patch_xml(1280, 720))
+
+    def test_resolution_patch_takes_the_smallest_template_that_fits(self):
+        # The Video Arena (0x7cd918) grows with the template: 2.25 GiB up to 1080p, then 1440p, 4K, 8K.
+        arena = lambda xml: re.search(r'Address="0x007cd918" Value="([0-9a-f]+)"', xml).group(1)
+        self.assertEqual(arena(g.resolution_patch_xml(1918, 1078)), '00000090')
+        self.assertEqual(arena(g.resolution_patch_xml(1970, 1108)), '000000b0')
+        self.assertEqual(arena(g.resolution_patch_xml(2954, 1662)), '000000f0')
+        self.assertEqual(arena(g.resolution_patch_xml(5118, 2878)), '000000ff')
+        xml = g.resolution_patch_xml(2954, 1662)
+        for value in ('8a0b0000', '7e060000', '8a0b', '7e06', 'c5050000', '3f030000'):
+            self.assertIn(f'Value="{value}"', xml)
 
 if __name__ == '__main__':
     unittest.main()

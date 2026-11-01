@@ -201,14 +201,14 @@ class SaveButtonTest(LauncherOverTemporaryFiles):
 
 
 class HiddenUpscalingTest(LauncherOverTemporaryFiles):
-    INI = ('upscaler=fsr4\npreset=3\nfsr1=1\nsharpen=1\nsharpness=0.73\n'
+    INI = ('upscaler=fsr3\npreset=3\nfsr1=1\nsharpen=1\nsharpness=0.73\n'
            'rcas=1\nrcas_strength=42\nobject_motion=0\noutput_res=2560x1440\n')
 
     def test_hidden_settings_are_preserved_without_migration(self):
         before, _lines = launcher.load_ini()
-        for key in ('upscaler', 'preset', 'fsr1', 'sharpen', 'sharpness', 'rcas',
-                    'rcas_strength', 'object_motion', 'output_res', 'live_resolution',
-                    'experimental_upscaler'):
+        # The upscaler, its preset and its switch are shown on the Graphics page; the rest stays hidden.
+        for key in ('fsr1', 'sharpen', 'sharpness', 'rcas', 'rcas_strength', 'object_motion',
+                    'output_res', 'live_resolution'):
             self.assertNotIn(key, self.app.vars)
         self.assertEqual(self.save_state(), 'disabled')
         self.app.var('vsync', 'ini').set(False)
@@ -220,8 +220,8 @@ class HiddenUpscalingTest(LauncherOverTemporaryFiles):
         self.app.var('ui_language', 'app').set('ru')
         self.app.save()
         self.root.update_idletasks()
-        self.assertNotIn('upscaler', self.app.vars)
-        self.assertEqual(launcher.load_ini()[0]['upscaler'], 'fsr4')
+        self.assertNotIn('output_res', self.app.vars)
+        self.assertEqual(launcher.load_ini()[0]['output_res'], '2560x1440')
 
 
 @unittest.skipUnless(tk, 'needs Tk')
@@ -278,8 +278,7 @@ class EverySettingSavesTest(LauncherOverTemporaryFiles):
         self.change_and_save('key cross', app.control_vars['key']['cross'], 'Q')
         self.change_and_save('pad cross', app.control_vars['pad']['cross'], 'b')
         expected = {key: var.get() for key, var in app.vars.items()}
-        self.assertEqual(len(expected), len([k for k in launcher.INI_DEFAULTS if k in app.vars]) +
-                         len([k for k in launcher.APP_DEFAULTS if k in app.vars]))
+        self.assertEqual(set(expected), (set(launcher.INI_DEFAULTS) | set(launcher.APP_DEFAULTS)) & set(app.vars))
         self.close_window()
         self.root = tk.Tk()
         reopened = launcher.Launcher(self.root, tk, ttk, filedialog, messagebox)

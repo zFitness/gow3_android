@@ -15,8 +15,16 @@ typedef spartanport_jmp_buf sigjmp_buf;
 extern __thread sigjmp_buf *runtime_fault_recover;
 /* Restarts the game (in-game settings menu, render resolution change). */
 void runtime_restart(void);
+/* SPARTAN_SLOW_WAITS=<ms>: log guest blocking calls (locks, waits, reads) longer than that.
+ * runtime_wait_begin() returns 0 when it is off; runtime_wait_end() then does nothing. */
+uint64_t runtime_wait_begin(void);
+void runtime_wait_end(const char *what,uint64_t start,const char *detail,long long arg);
+/* The floating-point state a PS4 gives its threads (runtime_thread.c). */
+void runtime_orbis_fpu(void);
 /* The guest's calling convention for host functions it calls. Elsewhere than x86-64 the guest CPU
- * (gport_guest_cpu.h) converts guest calls to the host's convention. */
+ * (gport_guest_cpu.h) converts guest calls to the host's convention.
+ * gport: the declarations above are outside the x86-64 guard on purpose — the device line
+ * builds this file for aarch64 too. */
 #if defined(__x86_64__)
 #define ABI __attribute__((sysv_abi))
 #else
@@ -68,6 +76,8 @@ int runtime_file_mount(const char *guest, const char *host);
 void runtime_file_unmount(const char *guest);
 int runtime_file_translate(const char *guest, char *out, size_t size);
 int64_t runtime_file_open(const char *path, int flags, int mode);
+/* 1 while the last area WAD the game opened is a Cronos one (Crn*.WAD). */
+int runtime_file_cronos(void);
 int64_t runtime_file_close(int fd);
 int64_t runtime_file_read(int fd, void *buffer, uint64_t size);
 int64_t runtime_file_pread(int fd, void *buffer, uint64_t size, int64_t offset);
@@ -80,6 +90,9 @@ void runtime_thread_keys_cleanup(void);
 /* Guest-visible errno values are FreeBSD's. */
 int32_t runtime_guest_errno(int host_errno);
 void *runtime_low_map(size_t size, int prot);
+/* Zeroed, 64-byte aligned host records the guest sees by address, below 1 TiB (SPARTAN_LOW_HANDLES). */
+void *runtime_low_alloc(size_t size);
+void runtime_low_free(void *pointer);
 /* Windows: reserves the PS4 user address range as a placeholder (no-op elsewhere). */
 void runtime_memory_reserve(void);
 uintptr_t runtime_ajm_resolve(const char *name);
@@ -100,6 +113,8 @@ uintptr_t runtime_audio_resolve(const char *name);
 void runtime_audio_report(void);
 uintptr_t runtime_pad_resolve(const char *name);
 void runtime_pad_report(void);
+/* Kratos' object, stored by the player hook (src/player_hook.h); 0 until he first moves. */
+extern uintptr_t runtime_player_object;
 /* probe --gamepad: prints one "Gamepad:" line for the first pad found (returns 1) or none (0). */
 int runtime_pad_describe(void);
 uintptr_t runtime_rtc_resolve(const char *name);
@@ -111,6 +126,7 @@ void runtime_savedata_report(void);
 #define RUNTIME_SAVE_PARAM_SIZE 1328
 int runtime_savedata_param(int32_t user, const char *dir, void *param);
 int runtime_savedata_icon(int32_t user, const char *dir, char *out, size_t size);
+int64_t runtime_savedata_mtime(int32_t user, const char *dir);
 void runtime_savedata_preview_path(const char *path);
 void runtime_thread_attach_host(const char *name);
 #endif
