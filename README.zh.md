@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="docs/images/nixport-banner.png" alt="nixport" width="620"><br><br>
   <img src="packaging/icon/monogram.png" alt="SP" width="130"><br>
-  <img src="docs/images/spartanport-logo.png" alt="SpartanPort" width="520">
+  <img src="docs/images/spartanport-logo.png" alt="SpartanPort" width="520"><br><br>
+  <img src="docs/images/nixport-banner.png" alt="nixport" width="620">
 </p>
 
 # SpartanPort —— ARM64 Android 移植版
@@ -14,7 +14,8 @@
 
 > **本仓库是上游 SpartanPort 的 ARM64 Android 移植工作分支，不是上游发布页。**
 > 上游只发布 Windows 10/11 与 x86-64 Linux（实验性 AppImage）；本分支把同一套端口
-> 交叉编译成 **aarch64 Linux 原生程序**，跑在 Android 平板/手机上（宿主为 **nixport**）。
+> 交叉编译成 **aarch64 Linux 原生程序**，跑在 Android 平板/手机上（宿主是 **nixport**，
+> 见 [发布页](https://github.com/zFitness/nixport/releases)）。
 > 下面第 0 章列出与上游的全部差异，第 1 章之后是上游 README 的中文版。
 
 ---
@@ -178,18 +179,21 @@ FEX 执行 guest 代码时这套机制不同，于是这些功能在 FEX 路径�
 **你需要：**
 
 - 一台 ARM64 Android 设备（本项目在 1904×3040 的平板上验证）；
-- 已装好 **nixport** 宿主（提供 rootfs、rootfs 的 glibc、GPU 驱动与会话管理）；
+- **宿主 nixport**（提供 rootfs、rootfs 的 glibc、GPU 驱动与会话管理）—— 没装先去
+  [nixport 的发布页](https://github.com/zFitness/nixport/releases)下载安装；
 - 你自己的游戏 dump（`eboot.bin` / `sce_module` / `sce_sys` 齐全的目录）；
 - Android 侧可用的 Vulkan 1.3 驱动（推荐 Turnip）。
 
 **步骤**
 
-1. 从本分支的构建产物拿到 `dist/spartanport-port.zip`（包根 = `port.json` + 恰好一个
+1. **先装宿主 nixport**：从 [nixport 发布页](https://github.com/zFitness/nixport/releases)
+   下载 APK 装到手机上（第一次启动会解包 rootfs，要等一会儿）；
+2. 从本分支的构建产物拿到 `dist/spartanport-port.zip`（包根 = `port.json` + 恰好一个
    `SpartanPort-arm64.AppImage` + 可选的 `virtualkeys.json`）；
-2. 把 zip 传到设备（`/sdcard/Download/`），在 nixport 的「库 → 导入 Port 分发包」里选中它；
-3. 宿主导入后，这个 Port 的目录落在 `files/imports/<port.json 的 id>/`，虚拟按键布局自动
+3. 把 zip 传到设备（`/sdcard/Download/`），在 nixport 的「库 → 导入 Port 分发包」里选中它；
+4. 宿主导入后，这个 Port 的目录落在 `files/imports/<port.json 的 id>/`，虚拟按键布局自动
    物化成它的每游戏默认布局；
-4. 进 Port 的启动器（条目只有一个：`SpartanPort 启动器`）→ 选游戏目录 → 保存 → 开始游戏。
+5. 进 Port 的启动器（条目只有一个：`SpartanPort 启动器`）→ 选游戏目录 → 保存 → 开始游戏。
 
 **玩的时候**
 
