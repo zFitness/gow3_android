@@ -13,7 +13,7 @@
 
 > **本仓库是上游 SpartanPort 的 ARM64 Android 移植工作分支，不是上游发布页。**
 > 上游只发布 Windows 10/11 与 x86-64 Linux（实验性 AppImage）；本分支把同一套端口
-> 交叉编译成 **aarch64 Linux 原生程序**，跑在 Android 平板/手机上（宿主为 **FeXDroid**）。
+> 交叉编译成 **aarch64 Linux 原生程序**，跑在 Android 平板/手机上（宿主为 **nixport**）。
 > 下面第 0 章列出与上游的全部差异，第 1 章之后是上游 README 的中文版。
 
 ---
@@ -56,13 +56,13 @@
 上游是 **PC 原生端口**（guest x86-64 在 PC 处理器上直接跑，图形经 shadPS4 转 Vulkan）；
 本分支是 **ARM64 Android 端口**：手机上没有 x86-64 处理器，游戏的 guest 代码改由
 **FEXCore** 执行，图形栈仍是 shadPS4 → Vulkan（跑 Android 的 Vulkan 驱动），
-并按 fexdroid 的 **Port 分发包**契约交付。
+并按 nixport 的 **Port 分发包**契约交付。
 
 ### 差异对照表
 
 | 维度 | 上游 SpartanPort | 本分支（ARM64 Android） |
 |---|---|---|
-| 目标平台 | Windows 10/11、x86-64 Linux（实验性） | aarch64 Android（宿主 fexdroid） |
+| 目标平台 | Windows 10/11、x86-64 Linux（实验性） | aarch64 Android（宿主 nixport） |
 | guest CPU | x86-64 指令**原生**跑在 PC 的 CPU 上 | x86-64 指令由 **FEXCore**（JIT + 优化器）执行 |
 | 图形 | shadPS4 → Vulkan（桌面驱动） | 同一套 shadPS4 → Vulkan（Android 驱动，如 Turnip） |
 | 交付形态 | GitHub Release 的 zip / AppImage | **Port 分发包** `.zip`（`port.json` + 恰好一个 `.AppImage` + 可选 `virtualkeys.json`） |
@@ -79,16 +79,16 @@
 
 1. 工具链 = `clang --target=aarch64-linux-gnu` + Debian arm64 sysroot（`fetch-sysroot.py` 自动拉取，SHA256 锁定）；
 2. 跳过 x86 宿主专属源（`isa_emulate` / `cpu_check` / `isa_rewrite`——guest x86 代码交给 FEXCore）；
-3. probe 链接时**烤入 fexdroid rootfs 的 ELF 解释器**（Android 沙箱里没有 `/lib`）。
+3. probe 链接时**烤入 nixport rootfs 的 ELF 解释器**（Android 沙箱里没有 `/lib`）。
 
 打包出来的程序树沿用上游 packaged 布局（`bin/spartanport-probe`、`bin/gpu/`、`run.py`、`scripts/`），
-另外加 fexdroid 契约要求的程序入口 `entry.sh`（包契约本身是包根的 `port.json`）。依赖库策略与上游同源：打包宿主没有的库
+另外加 nixport 契约要求的程序入口 `entry.sh`（包契约本身是包根的 `port.json`）。依赖库策略与上游同源：打包宿主没有的库
 （SDL3、ffmpeg、libgportgpu/cpu…），排除 rootfs 标配（glibc、Vulkan loader、X11、PulseAudio、fontconfig…）。
 
 **2）运行时适配（Android 侧）**
 
 - 游戏目录与存档落在 Android 外部存储（`/storage/emulated/0/...`），启动器设置、存档、日志按
-  fexdroid 的 storage 约定统一到 `storage.home`；
+  nixport 的 storage 约定统一到 `storage.home`；
 - SDL 手柄热插拔扫描在 Android 上被 SELinux 拒绝 → 抑制，避免刷屏；
 - MSAA render target 不再无条件走 `eStorage`；
 - Tk 启动器在会话内可用（`launcher.sh` + 显式 `TCL_LIBRARY` / `TK_LIBRARY`）；
@@ -169,7 +169,7 @@ FEX 执行 guest 代码时这套机制不同，于是这些功能在 FEX 路径�
 **你需要：**
 
 - 一台 ARM64 Android 设备（本项目在 1904×3040 的平板上验证）；
-- 已装好 **fexdroid** 宿主（提供 rootfs、rootfs 的 glibc、GPU 驱动与会话管理）；
+- 已装好 **nixport** 宿主（提供 rootfs、rootfs 的 glibc、GPU 驱动与会话管理）；
 - 你自己的游戏 dump（`eboot.bin` / `sce_module` / `sce_sys` 齐全的目录）；
 - Android 侧可用的 Vulkan 1.3 驱动（推荐 Turnip）。
 
@@ -177,7 +177,7 @@ FEX 执行 guest 代码时这套机制不同，于是这些功能在 FEX 路径�
 
 1. 从本分支的构建产物拿到 `dist/spartanport-port.zip`（包根 = `port.json` + 恰好一个
    `SpartanPort-arm64.AppImage` + 可选的 `virtualkeys.json`）；
-2. 把 zip 传到设备（`/sdcard/Download/`），在 fexdroid 的「库 → 导入 Port 分发包」里选中它；
+2. 把 zip 传到设备（`/sdcard/Download/`），在 nixport 的「库 → 导入 Port 分发包」里选中它；
 3. 宿主导入后，这个 Port 的目录落在 `files/imports/<port.json 的 id>/`，虚拟按键布局自动
    物化成它的每游戏默认布局；
 4. 进 Port 的启动器（条目只有一个：`SpartanPort 启动器`）→ 选游戏目录 → 保存 → 开始游戏。
@@ -412,6 +412,24 @@ Esc 或 Circle 取消。
 端口的存档对话框最多显示 **32** 条。若长列表里少了某个槽，用一个只含该槽（外加同级元数据目录）
 的单独 **Saves folder** 试一次。保留原存档，测完把 Saves folder 设置改回去。
 
+### 用存档压缩包（zip）导入
+
+启动器自己就能导入：**Game → Import saves from a zip**（导入存档）。压缩包里的存档布局与
+端口自己保存的一致：
+
+```
+savedata/1/<TITLE_ID>/<SLOT>/SAVEDATA
+savedata/1/<TITLE_ID>/<SLOT>.sce_sys/param.bin
+savedata/1/<TITLE_ID>/<SLOT>.sce_sys/icon0.png
+```
+
+导入会**整体替换该 title id 的目录**：压缩包里的槽位成为这个游戏的槽位，包里没有的槽位会消失。
+导入前先把当前存档备份一份（见下面的 **Save backups**），所以可以撤销。若压缩包的 title id 与
+游戏目录不一致，启动器会先提示，由你决定是否仍然导入。
+
+在 Android（Nixport）上，文件是在宿主的触屏选择屏里挑的：先把 zip 放进手机存储（一般是「下载」）
+再选它。
+
 ---
 
 ## 7. 第三方叠加层（Windows）
@@ -468,7 +486,7 @@ ReShade 安装器里选同一个可执行文件与 **Vulkan** API。
 
 ```bash
 bash packaging/arm-linux/build.sh      # 交叉构建 + 组包 + verb 冒烟 → packaging/arm-linux/dist/spartanport-port.zip
-bash packaging/arm-linux/deploy.sh     # adb push 到 fexdroid debug app（真机调试）
+bash packaging/arm-linux/deploy.sh     # adb push 到 nixport debug app（真机调试）
 ```
 
 前置（宿主状态，首次自动准备）：

@@ -2426,6 +2426,70 @@ EXTRA['id'].update({
     'Version {} is out, but it has no Linux build yet.': 'Versi {} telah tersedia, tetapi belum memiliki build Linux.',
 })
 
+EXTRA['zh'].update({
+    'A zip with savedata/1/<title id>/<slot>/SAVEDATA. It replaces the saves of that title; the current saves are backed up first.': 'zip 内含 savedata/1/<title id>/<slot>/SAVEDATA。它会替换该 title 的存档；当前存档会先自动备份。',
+    'Choose the save package': '选择存档压缩包',
+    'Close the game before importing saves.': '导入存档前请先关闭游戏。',
+    'Could not import the saves: {}': '无法导入存档：{}',
+    'Could not read the save package: {}': '无法读取存档压缩包：{}',
+    'Import saves from a zip': '从 zip 导入存档',
+    'Import saves…': '导入存档…',
+    'Import these saves?': '导入这些存档吗？',
+    'Save package': '存档压缩包',
+    'Saves imported: {}': '已导入存档：{}',
+    'The package holds: {}': '压缩包内容：{}',
+    'The package is for {}, but the game folder is {}. Import it anyway?': '压缩包属于 {}，但游戏目录是 {}。仍要导入吗？',
+    'The previous saves are in the backup {}.': '原存档已备份到 {}。',
+})
+
+EXTRA['pt'].update({
+    'A zip with savedata/1/<title id>/<slot>/SAVEDATA. It replaces the saves of that title; the current saves are backed up first.': 'Um zip com savedata/1/<title id>/<slot>/SAVEDATA. Ele substitui os saves desse título; os saves atuais são salvos antes.',
+    'Choose the save package': 'Escolher o pacote de saves',
+    'Close the game before importing saves.': 'Feche o jogo antes de importar os saves.',
+    'Could not import the saves: {}': 'Não foi possível importar os saves: {}',
+    'Could not read the save package: {}': 'Não foi possível ler o pacote de saves: {}',
+    'Import saves from a zip': 'Importar saves de um zip',
+    'Import saves…': 'Importar saves…',
+    'Import these saves?': 'Importar estes saves?',
+    'Save package': 'Pacote de saves',
+    'Saves imported: {}': 'Saves importados: {}',
+    'The package holds: {}': 'O pacote contém: {}',
+    'The package is for {}, but the game folder is {}. Import it anyway?': 'O pacote é de {}, mas a pasta do jogo é {}. Importar mesmo assim?',
+    'The previous saves are in the backup {}.': 'Os saves anteriores estão no backup {}.',
+})
+
+EXTRA['es'].update({
+    'A zip with savedata/1/<title id>/<slot>/SAVEDATA. It replaces the saves of that title; the current saves are backed up first.': 'Un zip con savedata/1/<title id>/<slot>/SAVEDATA. Sustituye las partidas guardadas de ese título; las actuales se guardan antes.',
+    'Choose the save package': 'Elegir el paquete de partidas',
+    'Close the game before importing saves.': 'Cierra el juego antes de importar las partidas.',
+    'Could not import the saves: {}': 'No se pudieron importar las partidas: {}',
+    'Could not read the save package: {}': 'No se pudo leer el paquete de partidas: {}',
+    'Import saves from a zip': 'Importar partidas desde un zip',
+    'Import saves…': 'Importar partidas…',
+    'Import these saves?': '¿Importar estas partidas?',
+    'Save package': 'Paquete de partidas',
+    'Saves imported: {}': 'Partidas importadas: {}',
+    'The package holds: {}': 'El paquete contiene: {}',
+    'The package is for {}, but the game folder is {}. Import it anyway?': 'El paquete es de {}, pero la carpeta del juego es {}. ¿Importarlo de todos modos?',
+    'The previous saves are in the backup {}.': 'Las partidas anteriores están en la copia de seguridad {}.',
+})
+
+EXTRA['id'].update({
+    'A zip with savedata/1/<title id>/<slot>/SAVEDATA. It replaces the saves of that title; the current saves are backed up first.': 'zip dengan savedata/1/<title id>/<slot>/SAVEDATA. Ini menggantikan simpanan untuk title tersebut; simpanan saat ini dicadangkan lebih dulu.',
+    'Choose the save package': 'Pilih paket simpanan',
+    'Close the game before importing saves.': 'Tutup game sebelum mengimpor simpanan.',
+    'Could not import the saves: {}': 'Tidak bisa mengimpor simpanan: {}',
+    'Could not read the save package: {}': 'Tidak bisa membaca paket simpanan: {}',
+    'Import saves from a zip': 'Impor simpanan dari zip',
+    'Import saves…': 'Impor simpanan…',
+    'Import these saves?': 'Impor simpanan ini?',
+    'Save package': 'Paket simpanan',
+    'Saves imported: {}': 'Simpanan diimpor: {}',
+    'The package holds: {}': 'Paket berisi: {}',
+    'The package is for {}, but the game folder is {}. Import it anyway?': 'Paket untuk {}, tetapi folder game adalah {}. Tetap impor?',
+    'The previous saves are in the backup {}.': 'Simpanan sebelumnya ada di cadangan {}.',
+})
+
 _tables = {}
 
 

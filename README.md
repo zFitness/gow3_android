@@ -323,6 +323,26 @@ from a long list, test it with a separate **Saves folder** containing just that 
 under `savedata\1\CUSA01623\`, with its sibling metadata folder. Keep the original saves
 and restore the previous Saves folder setting after testing.
 
+### Importing a save package (zip)
+
+The launcher imports saves from a zip on its own: **Game → Import saves from a zip**. The
+package holds the saves the way the port keeps them:
+
+```
+savedata/1/<TITLE_ID>/<SLOT>/SAVEDATA
+savedata/1/<TITLE_ID>/<SLOT>.sce_sys/param.bin
+savedata/1/<TITLE_ID>/<SLOT>.sce_sys/icon0.png
+```
+
+Importing **replaces the whole folder of that title id**: the slots in the package become
+the slots of that game, and the slots that are not in it are gone. The current saves are
+backed up first (**Save backups** below), so an import can be undone. When the package
+holds another title id than the game folder, the launcher says so and asks before it
+imports anyway.
+
+On Android (Nixport) the file is chosen in the host's touch picker: put the zip in the
+phone's storage (Downloads is the usual place) and pick it there.
+
 ## Third-party overlays (Windows)
 
 The game process is **`bin\spartanport-probe.exe`**, not `SpartanPort.exe` (source builds

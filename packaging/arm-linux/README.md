@@ -107,3 +107,15 @@ L3+R3 ⇒ 屏上一个键就能触发。
 
 用中键而不是在屏上凑 L3+R3 两个键：后者会与端口叠加层的 R3 修饰键打架（按住 L2 再按
 R3 会被端口当成「开菜单」）。
+
+### 在设备上导入存档（zip）
+
+启动器的 **Game → Import saves from a zip**（导入存档）在设备上走**宿主的选择屏**：
+`scripts/nixport_host.py` → rootfs 里的 `nxp-port pick-file --ext zip` → 宿主服务总线
+（`NXP_HOST_SOCKET`）⇒ 宿主的触屏网格选择屏（根是共享存储 `/storage/emulated/0`）。
+把 zip 放进手机的「下载」目录，在选择屏里挑它即可。
+
+压缩包里的布局与端口自己保存的一致（`savedata/1/<title id>/<slot>/SAVEDATA` 与同级的
+`<slot>.sce_sys/`），导入会**整体替换该 title id 的目录**，导入前先自动备份一次
+（`savedata_backups/`，可在启动器的 Save backups 里恢复）。压缩包的 title id 与游戏目录
+不一致时，启动器会先提示，由用户确认。

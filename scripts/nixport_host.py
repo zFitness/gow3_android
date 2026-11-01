@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""客机侧调用 nixport 宿主服务总线：目录选择走宿主的触屏原生选择屏。
+"""客机侧调用 nixport 宿主服务总线：目录与文件选择走宿主的触屏原生选择屏。
 
 Runtime rootfs 自带 /usr/local/bin/nxp-port（宿主服务总线的客机命令行客户端，协议与退出码见
 my-docs/移植规范/宿主服务总线.md），这里只调它，不自己连总线。总线不可用时（无会话、宿主
@@ -73,6 +73,17 @@ def pick_directory(initial=None):
     was not there."""
     arguments = ['--initial', initial] if initial else []
     return _run('pick-dir', arguments)
+
+
+def pick_file(initial=None, extensions=()):
+    """The file the player chose in the host's picker, None when they cancelled or the bus was not
+    there. `extensions` are the acceptable file extensions, without a dot ("zip")."""
+    arguments = []
+    if initial:
+        arguments += ['--initial', initial]
+    for extension in extensions:
+        arguments += ['--ext', extension]
+    return _run('pick-file', arguments)
 
 
 def _run(action, arguments):

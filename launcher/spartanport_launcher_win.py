@@ -52,6 +52,7 @@ import graphics_options  # noqa: E402  (scripts/)
 import legacy  # noqa: E402  (scripts/)
 import nixport_host  # noqa: E402  (scripts/)
 import save_backup  # noqa: E402  (scripts/)
+import save_import  # noqa: E402  (scripts/)
 import steam_shortcut  # noqa: E402  (scripts/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
 from prepare import load_sfo  # noqa: E402  (scripts/)
@@ -2150,6 +2151,7 @@ class Launcher:
                     _('Choose the saves folder', 'Выберите папку сохранений'),
                     _('Empty: {} (shader caches are kept there too).',
                       'Пусто: {} (там же кэш шейдеров).').format(DATA_DIR / 'user'), on_change=self.refresh_status)
+        self.build_save_import(f)
         self.section(f, _('Saves'))
         self.build_save_backups(f)
         self.section(f, _('Language'))
@@ -2289,6 +2291,68 @@ class Launcher:
                      fg=colour if got else MUTED, font=self.font(UI_FONT, 9), anchor='w').pack(fill='x')
             tk.Label(card, text=_('UNLOCKED', 'ПОЛУЧЕН') if got else _('LOCKED', 'ЗАКРЫТ'), bg=CARD,
                      fg=ACCENT_HI if got else MUTED, font=self.font(UI_FONT, 9, 'bold')).pack(side='right', padx=16)
+
+    def build_save_import(self, f):
+        """A button that imports a zip of saves into the saves folder."""
+        ttk = self.ttk
+        holder = ttk.Frame(f)
+        ttk.Button(holder, text=_('Import saves…', 'Импорт сохранений…'), command=self.import_saves).pack(side='left')
+        self.row(f, _('Import saves from a zip', 'Импорт сохранений из zip'), holder,
+                 _('A zip with savedata/1/<title id>/<slot>/SAVEDATA. It replaces the saves of that '
+                   'title; the current saves are backed up first.',
+                   'zip с savedata/1/<title id>/<slot>/SAVEDATA. Заменяет сохранения этого тайтла; '
+                   'текущие сначала резервируются.'))
+
+    def ask_save_package(self):
+        """The save package the player chose: the host's touch picker on the device, the Tk
+        dialog on the desktop."""
+        if build_flags.NIXPORT and nixport_host.available():
+            return nixport_host.pick_file(initial='/sdcard/Download', extensions=['zip'])
+        start = str(self.user_dir() if self.user_dir().is_dir() else DATA_DIR)
+        chosen = self.filedialog.askopenfilename(
+            title=_('Choose the save package', 'Выберите zip с сохранениями'), initialdir=start,
+            filetypes=[(_('Save package', 'Zip с сохранениями'), '*.zip')])
+        return chosen or None
+
+    def game_title_id(self):
+        """The title id of the game folder, None when there is no game folder yet."""
+        title_id, _profile = game_profile_of(self.meta_dir())
+        return title_id
+
+    def import_saves(self):
+        """Imports a zip of saves (savedata/1/<title id>/<slot>/SAVEDATA) into the saves folder."""
+        if self.process:
+            self.messagebox.showwarning(APP_NAME, _('Close the game before importing saves.',
+                                                    'Закройте игру перед импортом сохранений.'))
+            return
+        chosen = self.ask_save_package()
+        if not chosen:
+            return
+        try:
+            plans = save_import.inspect(chosen)
+        except (OSError, ValueError, zipfile.BadZipFile) as error:
+            self.messagebox.showerror(APP_NAME, _('Could not read the save package: {}').format(error))
+            return
+        text = _('The package holds: {}').format('; '.join(plan.summary() for plan in plans))
+        game_title = self.game_title_id()
+        titles = sorted({plan.title_id for plan in plans})
+        if game_title and any(title != game_title for title in titles):
+            text += '\n\n' + _('The package is for {}, but the game folder is {}. Import it anyway?'
+                               ).format(', '.join(titles), game_title)
+        if not self.messagebox.askyesno(APP_NAME, _('Import these saves?') + '\n\n' + text):
+            return
+        try:
+            backup, imported = save_import.apply(self.user_dir(), plans, chosen)
+        except (OSError, ValueError) as error:
+            self.messagebox.showerror(APP_NAME, _('Could not import the saves: {}').format(error))
+            return
+        self.refresh_status()
+        self.refresh_backups()
+        message = _('Saves imported: {}').format(
+            '; '.join('{} ({})'.format(title, ', '.join(slots)) for title, slots in imported))
+        if backup:
+            message += '\n' + _('The previous saves are in the backup {}.').format(backup.name)
+        self.messagebox.showinfo(APP_NAME, message)
 
     def build_save_backups(self, f):
         """run.py backs the saves up before every start; one of them can be restored here."""
