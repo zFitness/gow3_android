@@ -119,6 +119,14 @@ launcher)
         exit 3
     fi
     echo "launcher: tkinter ok, starting UI" >> "$DATA/logs/launch.log" 2>&1 || true
+    # gport: Rust 启动器开关——ini 里 `launcher=rust`（或 SPARTAN_RUST_LAUNCHER=rust/1）
+    # 且 bin/ 下有 rust 版时走它；缺省仍是 Python 启动器。切换后重开会话生效。
+    _cfg_launcher=$(_cfg launcher) || _cfg_launcher=""
+    if [ "${SPARTAN_RUST_LAUNCHER:-$_cfg_launcher}" = "rust" ] && [ -x "$BIN/spartanport-launcher-rust" ]; then
+        echo "launcher: starting the RUST launcher" >> "$DATA/logs/launch.log" 2>&1 || true
+        exec "$LOADER" --library-path "$TREE/lib:$HOST/usr/lib/aarch64-linux-gnu:$HOST/usr/lib" \
+            "$BIN/spartanport-launcher-rust" 2>> "$DATA/logs/launch.log"
+    fi
     py_exec "$TREE/launcher/spartanport_launcher_win.py" 2>> "$DATA/logs/launch.log"
     ;;
 check|vulkan)

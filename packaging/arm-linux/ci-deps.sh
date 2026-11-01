@@ -53,6 +53,13 @@ CMAKE
 fi
 echo "tsl-robin-map: $tsl_dir"
 
+# ---- Vulkan-Headers：Debian 自带头偏旧，build.sh 用它 overlay 进 sysroot ---------------
+vh=$root/.local-deps/Vulkan-Headers
+if [[ ! -d $vh/include/vulkan ]]; then
+    rm -rf "$vh"
+    git clone -q --depth 1 -b vulkan-sdk-1.4.357.0 https://github.com/KhronosGroup/Vulkan-Headers "$vh"
+fi
+
 # ---- Boost 的 cmake 目录（build.sh 用 Boost_DIR 找它）---------------------------------
 boost_dir=$(find /usr/lib /usr/local/lib -maxdepth 3 -type d -name 'Boost-*' -path '*/cmake/*' 2>/dev/null | sort | tail -n 1)
 [[ -n $boost_dir ]] || die "boost cmake dir not found (apt libboost-dev)"

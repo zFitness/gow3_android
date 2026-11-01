@@ -30,7 +30,11 @@ if [[ ! -d $sysroot/usr/lib/aarch64-linux-gnu ]]; then
 fi
 if [[ ! -d $sysroot/usr/lib/aarch64-linux-gnu ]]; then
     echo ">> sysroot not found, fetching (packaging/arm-linux/fetch-sysroot.py)"
-    python3 packaging/arm-linux/fetch-sysroot.py --out "$sysroot"
+    # gport: Debian 自带的 Vulkan 头偏旧（缺 vk::DriverId::eMesaKosmickrisp 等），
+    # 拉完后用本地的 Vulkan-Headers（ci-deps.sh 负责克隆）overlay 新头。
+    vh=$root/.local-deps/Vulkan-Headers
+    vh_args=""; [[ -d $vh/include/vulkan ]] && vh_args="--vulkan-headers $vh"
+    python3 packaging/arm-linux/fetch-sysroot.py --out "$sysroot" $vh_args
 fi
 headers=${SPARTAN_ARM64_HEADERS:-}
 if [[ -z $headers && -d $root/../gow_android_glibc/.local-deps/root/usr ]]; then
@@ -157,6 +161,17 @@ mkdir -p "$out/bin/gpu"
     "${libraries[@]}" -o "$out/bin/spartanport-probe"
 install -m755 "$out/gpu/libgportgpu.so" "$out/bin/gpu/"
 install -m755 "$out/fex/libgportcpu.so" "$out/bin/gpu/"
+# ---- 3.5/5 Rust 启动器（可选）：有 cargo 就带上，没有则包回退 Python 启动器 ----------
+begin "rust launcher (optional)"
+if command -v cargo >/dev/null 2>&1; then
+    bash launcher-rust/build-aarch64.sh
+    install -m755 launcher-rust/target/aarch64-unknown-linux-gnu/release/spartanport-launcher \
+        "$out/bin/spartanport-launcher-rust"
+    echo "    Rust 启动器已构建"
+else
+    echo "    cargo 不可用：跳过（包回退 Python 启动器）"
+fi
+end_stage "rust launcher"
 end_stage "probe + gpu/cpu libs"
 
 # ---- 4/5 依赖库打包（sysroot 解析 NEEDED；rootfs 标配不打包）----------------------------
@@ -190,6 +205,16 @@ bundle() {
 bundle "$out/bin/gpu/libgportgpu.so"
 bundle "$out/bin/gpu/libgportcpu.so"
 bundle "$out/bin/spartanport-probe"
+if [[ -f $out/bin/spartanport-launcher-rust ]]; then
+    bundle "$out/bin/spartanport-launcher-rust"
+    # gport: 启动器运行时 dlopen 的库（winit X11 后端），NEEDED 扫描看不到 ⇒ 显式带上。
+    # 依赖树：libxkbcommon-x11→{libxkbcommon,libX11-xcb,libxcb}、libxcb-xkb→libxcb，
+    # 其余全是 rootfs 标配（排除清单已含）。
+    for name in libxkbcommon-x11.so.0 libxcb-xkb.so.1; do
+        target=$(find "$sysroot/usr/lib/aarch64-linux-gnu" -maxdepth 1 -name "$name" -print -quit 2>/dev/null || true)
+        [[ -n $target ]] && install -m755 "$target" "$out/lib/$name"
+    done
+fi
 find "$out/lib" -name '*.so*' -exec "$llvm_bin/llvm-strip" --strip-unneeded {} + 2>/dev/null || true
 end_stage "$(ls "$out/lib" | wc -l | tr -d ' ') libs"
 
@@ -199,6 +224,9 @@ appdir=$out/pkg/$program
 rm -rf "$out/pkg"
 mkdir -p "$appdir/bin/gpu" "$appdir/lib" "$appdir/config"
 install -m755 "$out/bin/spartanport-probe" "$appdir/bin/"
+if [[ -f $out/bin/spartanport-launcher-rust ]]; then
+    install -m755 "$out/bin/spartanport-launcher-rust" "$appdir/bin/"
+fi
 install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$appdir/bin/gpu/"
 cp -R "$out/lib/." "$appdir/lib/"
 install -m755 packaging/arm-linux/entry.sh "$appdir/entry.sh"

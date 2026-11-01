@@ -51,3 +51,6 @@ launcher-rust/target/
 .superpowers/
 # Local agent plans and specs (superpowers skills), not shared for now
 /docs/superpowers/
+launcher-rust/.cargo/config.toml
+# gport: 交叉编译配置含本机绝对路径，各机器自己生成，不入库
+launcher-rust/.cargo/

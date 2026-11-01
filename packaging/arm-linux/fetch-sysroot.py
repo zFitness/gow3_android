@@ -33,6 +33,9 @@ WANTED = [
     'libvulkan-dev', 'libfmt-dev', 'libxxhash-dev', 'libsdl3-dev', 'libx11-dev', 'libzydis-dev',
     'libavformat-dev', 'libavcodec-dev', 'libavutil-dev', 'libswscale-dev', 'libswresample-dev',
     'spirv-headers', 'zlib1g-dev',
+    # gport: Rust 启动器（launcher-rust，aarch64 交叉构建）的 winit X11 后端运行时
+    # dlopen 这两个（deb 名：libxkbcommon-x11-0 / libxcb-xkb1）。
+    'libxkbcommon-x11-0', 'libxcb-xkb1',
 ]
 # Not needed to compile or link (package management, scripts, documentation, data).
 SKIP = re.compile(r'^(debconf|perl.*|dpkg|adduser|tzdata|sensible-utils|libc-bin|libc-dev-bin|'

@@ -16,6 +16,7 @@
 set -euo pipefail
 here=$(cd -- "$(dirname -- "$0")" && pwd)
 root=$(cd -- "$here/.." && pwd)
+cd "$here"   # cargo 要在 launcher-rust/ 里跑（Cargo.toml 在这）
 sysroot=${SPARTAN_ARM64_SYSROOT:-$root/.local-deps/arm64-sysroot}
 [[ -d $sysroot/usr/lib/aarch64-linux-gnu ]] || { echo "sysroot missing: $sysroot" >&2; exit 1; }
 
