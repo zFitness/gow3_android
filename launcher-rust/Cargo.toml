@@ -48,7 +48,10 @@ flate2 = "1"
 md-5 = "0.10"
 crc32fast = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-rfd = "0.17"
+# gport: Linux 默认后端是 GTK3（C 库，ARM64 sysroot 里没有）⇒ 换 xdg-portal（纯 Rust，
+# 走 DBus 的文件选择框）。ARM64 移植用；上游桌面构建不受影响（特征合并后桌面仍是 gtk3？不——
+# 直接依赖关掉 default 后全仓统一，桌面如需 gtk3 再单独处理）。
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 iced = { version = "0.14", features = ["wgpu", "tiny-skia", "image", "canvas", "advanced", "tokio"] }
 # The x86 decoder of `runner/isa_rewrite.rs`: the engine and version of the Python's binding, so the
 # sites are the same. `instr_info` gives the flow control and the register numbers and sizes.
