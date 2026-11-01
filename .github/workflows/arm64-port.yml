@@ -48,14 +48,13 @@ jobs:
         env:
           GIT_TERMINAL_PROMPT: 0
         run: |
-          set -euo pipefail
-          dest="$GITHUB_WORKSPACE/../fexdroid"
-          rm -rf "$dest" && mkdir -p "$dest"
-          if ! curl -fsSL --retry 3 --retry-delay 5 https://codeload.github.com/zFitness/nixport/tar.gz/refs/heads/main \
-               | tar xz -C "$dest" --strip-components=1; then
-            rm -rf "$dest"
-            git clone --depth 1 https://github.com/zFitness/nixport.git "$dest"
-          fi
+          set -euxo pipefail
+          dest="$GITHUB_WORKSPACE/fexdroid"
+          rm -rf "$dest"
+          mkdir -p "$dest"
+          curl -fsSL --retry 3 --retry-delay 5 https://codeload.github.com/zFitness/nixport/tar.gz/refs/heads/main \
+            | tar xz -C "$dest" --strip-components=1
+          chmod +x "$dest"/scripts/*.sh
           test -x "$dest/scripts/build-port-appimage.sh"
           ls -l "$dest/scripts/build-port-appimage.sh"
 
@@ -64,6 +63,7 @@ jobs:
           # CI 的 runner 在公网，Debian 官方源比国内镜像快。
           GPORT_DEBIAN_MIRROR: https://deb.debian.org/debian
           SPARTAN_ARM64_HEADERS: ${{ github.workspace }}/.local-deps/root/usr
+          SPARTAN_HOST_TOOLS: ${{ github.workspace }}/fexdroid
         run: bash packaging/arm-linux/build.sh
 
       - name: Name and checksum

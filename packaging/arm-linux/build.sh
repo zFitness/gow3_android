@@ -259,7 +259,9 @@ echo "    verb smoke OK"
 
 # AppImage 组装：宿主管线（glibc 天花板 + 排除清单 + mksquashfs + runtime + 魔数）。
 # macOS 无 binutils 的 readelf —— 用 brew llvm 的 llvm-readelf 垫一层。
-fexdroid_tools=$([[ -d $root/../fexdroid ]] && echo "$root/../fexdroid" || echo "")
+# 宿主仓（nixport）里的 AppImage 组包脚本：默认找同级目录 ../fexdroid，CI 里用
+# SPARTAN_HOST_TOOLS 指到别处（runner 上同级目录可能在工作区之外）。
+fexdroid_tools=${SPARTAN_HOST_TOOLS:-$root/../fexdroid}
 [[ -n $fexdroid_tools && -x $fexdroid_tools/scripts/build-port-appimage.sh ]] || die "fexdroid/scripts/build-port-appimage.sh not found (../fexdroid)"
 shim=$out/.readelf-shim; mkdir -p "$shim"
 readelf_src=$(command -v readelf || { for c in "$(brew --prefix llvm 2>/dev/null)/bin/llvm-readelf"; do [[ -x $c ]] && echo "$c" && break; done; })
