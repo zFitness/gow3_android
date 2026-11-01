@@ -205,15 +205,12 @@ bundle() {
 bundle "$out/bin/gpu/libgportgpu.so"
 bundle "$out/bin/gpu/libgportcpu.so"
 bundle "$out/bin/spartanport-probe"
+# gport: 启动器运行时 dlopen 的 libxkbcommon-x11 / libxcb-xkb **不随包**——它们是
+# rootfs 标配（nixport-rootfs 的 rootfs-packages.txt，2026-11-01 起），宿主组包的
+# 排除清单也会剥掉 libxkbcommon*/libxcb*。旧 payload 没有它们 ⇒ Rust 启动器要求
+# rootfs payload 含这两个包（刷新 payload 即有）。
 if [[ -f $out/bin/spartanport-launcher-rust ]]; then
     bundle "$out/bin/spartanport-launcher-rust"
-    # gport: 启动器运行时 dlopen 的库（winit X11 后端），NEEDED 扫描看不到 ⇒ 显式带上。
-    # 依赖树：libxkbcommon-x11→{libxkbcommon,libX11-xcb,libxcb}、libxcb-xkb→libxcb，
-    # 其余全是 rootfs 标配（排除清单已含）。
-    for name in libxkbcommon-x11.so.0 libxcb-xkb.so.1; do
-        target=$(find "$sysroot/usr/lib/aarch64-linux-gnu" -maxdepth 1 -name "$name" -print -quit 2>/dev/null || true)
-        [[ -n $target ]] && install -m755 "$target" "$out/lib/$name"
-    done
 fi
 find "$out/lib" -name '*.so*' -exec "$llvm_bin/llvm-strip" --strip-unneeded {} + 2>/dev/null || true
 end_stage "$(ls "$out/lib" | wc -l | tr -d ' ') libs"
