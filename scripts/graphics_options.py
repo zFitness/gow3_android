@@ -75,11 +75,17 @@ def default_ini_values():
     """The startup options of spartanport.ini before the player changes them."""
     values = {'render_resolution': default_render_resolution(), 'engine_fps': '120',
               'deferred_readback': '1', 'stale_readback': '1', 'async_shaders': '1',
-              'monitor': '', 'hdr': '0', 'glyph_style': 'off', 'anisotropy': '0'}
+              'monitor': '', 'hdr': '0', 'glyph_style': 'off', 'anisotropy': '0',
+              # gport: 上游 3.0.0 新增的 RCAS 锐化默认是开；它让 presenter 每帧多跑一趟
+              # FSR/RCAS pass。设备线默认关（Turnip/Adreno 830 上疑似与呈现路径的 barrier
+              # 崩溃有关，见 docs/port/release-policy.md 同目录的诊断记录）；游戏内菜单
+              # （图形 → Sharpening）仍可临时打开。
+              'rcas': '1'}
     # gport: the device line (ARM) starts at its own defaults, not the desktop ones.
     if build_flags.ARM:
         values['render_resolution'] = DEVICE_DEFAULTS['render_resolution']
         values['engine_fps'] = DEVICE_DEFAULTS['engine_fps']
+        values['rcas'] = '0'
     return values
 
 
@@ -256,7 +262,7 @@ def startup_options(ini, extra=()):
         options['render_resolution'] = 'native'
     if options['engine_fps'] not in {str(f) for f in ENGINE_FPS}:
         options['engine_fps'] = '120'
-    for key in ('deferred_readback', 'stale_readback', 'async_shaders'):
+    for key in ('deferred_readback', 'stale_readback', 'async_shaders', 'rcas'):
         options[key] = '0' if options[key] == '0' else '1'
     monitor = options['monitor']
     options['monitor'] = monitor if monitor.isascii() and monitor.isdigit() and len(monitor) <= 10 and int(monitor) <= 2147483647 else ''

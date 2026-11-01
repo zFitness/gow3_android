@@ -76,6 +76,8 @@ class GraphicsOptionsTest(unittest.TestCase):
                 'hdr': '0',
                 'glyph_style': 'off',
                 'anisotropy': '0',
+                # gport: 上游 3.0.0 的 RCAS 默认开；桌面构建保持上游的值。
+                'rcas': '1',
             },
         )
 
