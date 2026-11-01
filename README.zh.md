@@ -21,10 +21,10 @@
 
 ## 截图
 
-| 端口启动器 | 游戏内菜单 | 游戏内奖杯列表 |
-|---|---|---|
-| <img src="docs/images/android/launcher.jpg" alt="端口启动器" width="420"> | <img src="docs/images/android/in-game-menu.jpg" alt="游戏内菜单" width="420"> | <img src="docs/images/android/trophies.jpg" alt="游戏内奖杯列表" width="420"> |
-| 屏上虚拟按键按横屏握持重排：△○×□ 在右拇指一掌之内，肩键给食指，⚙ 端口菜单 / 🏆 奖杯 / ⏱ 帧率 在左上角 | Insert / R3+L2：作弊选项、手柄、倍率、性能叠加层 | F8 / R3+R2：游戏内的奖杯列表 |
+| 宿主库（Port 已导入） | 端口启动器 | 游戏内菜单 | 游戏内奖杯列表 |
+|---|---|---|---|
+| <img src="docs/images/android/library.jpg" alt="宿主库" width="280"> | <img src="docs/images/android/launcher.jpg" alt="端口启动器" width="280"> | <img src="docs/images/android/in-game-menu.jpg" alt="游戏内菜单" width="280"> | <img src="docs/images/android/trophies.jpg" alt="游戏内奖杯列表" width="280"> |
+| nixport 的库页里，SpartanPort（2.7.0 · arm64）已导入 | 屏上虚拟按键按横屏握持重排：△○×□ 在右拇指一掌之内，肩键给食指，⚙ 端口菜单 / 🏆 奖杯 / ⏱ 帧率 在左上角 | Insert / R3+L2：作弊选项、手柄、倍率、性能叠加层 | F8 / R3+R2：游戏内的奖杯列表 |
 
 ## 目录
 
