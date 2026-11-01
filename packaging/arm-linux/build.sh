@@ -37,7 +37,17 @@ if [[ -z $headers && -d $root/../gow_android_glibc/.local-deps/root/usr ]]; then
     headers=$root/../gow_android_glibc/.local-deps/root/usr
 fi
 headers=${headers:-$root/.local-deps/root/usr}
-[[ -d $headers/share/cmake/tsl-robin-map ]] || die "host headers missing (tsl-robin-map/VMA/glslang): $headers"
+# tsl-robin-map 与 VulkanMemoryAllocator 是纯头文件库：本地放在 $headers 下，CI 用系统的
+# （apt 的 robin-map-dev 提供的 cmake 包，或 /usr/local 装的 VMA）。
+find_cmake_dir() {  # $1=包名
+    local dir
+    for dir in "$headers/share/cmake/$1" /usr/local/lib/cmake/"$1" /usr/lib/*/cmake/"$1" /usr/lib/cmake/"$1"; do
+        [[ -d $dir ]] && { printf '%s' "$dir"; return; }
+    done
+}
+tsl_dir=$(find_cmake_dir tsl-robin-map)
+vma_dir=$(find_cmake_dir VulkanMemoryAllocator)
+[[ -n $tsl_dir ]] || die "tsl-robin-map cmake config not found (headers: $headers)"
 [[ -x $headers/bin/glslangValidator ]] && export PATH="$headers/bin:$PATH"
 
 # ---- 工具链定位（macOS: brew llvm/lld/boost；Linux: 系统 llvm）-------------------------
@@ -118,8 +128,8 @@ if [[ ! -f $out/gpu/build.ninja ]] || ! grep -q "^SPARTAN_ARM:BOOL=$spartan_arm$
         -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSPARTAN_PGO=off -DSPARTAN_LTO=OFF \
         -DSPARTAN_ARM="$spartan_arm" -DSPARTAN_NIXPORT="$spartan_nixport" \
         -DSPARTAN_ARM64_HEADER_PREFIX="$headers" \
-        -Dtsl-robin-map_DIR="$headers/share/cmake/tsl-robin-map" \
-        -DVulkanMemoryAllocator_DIR="$headers/share/cmake/VulkanMemoryAllocator" \
+        -Dtsl-robin-map_DIR="$tsl_dir" \
+        ${vma_dir:+-DVulkanMemoryAllocator_DIR="$vma_dir"} \
         -DBoost_DIR="${boost_dir:-$headers/lib/cmake/Boost-1.87.0}" \
         -DZydis_DIR="$sysroot/usr/lib/aarch64-linux-gnu/cmake/zydis" >/dev/null
 fi
