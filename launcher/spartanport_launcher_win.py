@@ -72,7 +72,8 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.7.0'
+# gport: 跟随上游 3.0.0（port.json 同步）；仅显示与更新比较用。
+VERSION = '3.0.0'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/SpartanPort/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/SpartanPort/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'spartanport-update'
