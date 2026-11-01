@@ -1,6 +1,7 @@
 <p align="center">
-  <img src="packaging/icon/monogram.png" alt="SP" width="160"><br>
-  <img src="docs/images/spartanport-logo.png" alt="SpartanPort" width="600">
+  <img src="docs/images/nixport-banner.png" alt="nixport" width="620"><br><br>
+  <img src="packaging/icon/monogram.png" alt="SP" width="130"><br>
+  <img src="docs/images/spartanport-logo.png" alt="SpartanPort" width="520">
 </p>
 
 # SpartanPort —— ARM64 Android 移植版
@@ -20,18 +21,10 @@
 
 ## 截图
 
-**端口启动器** —— 屏上是为横屏握持重排的虚拟按键（△○×□ 在右拇指一掌之内，肩键给食指，
-⚙ 端口菜单 / 🏆 奖杯 / ⏱ 帧率 三个入口在左上角）
-
-![端口启动器](docs/images/android/launcher.jpg)
-
-**游戏内菜单**（Insert / R3+L2）—— 作弊选项、手柄、倍率、性能叠加层
-
-![游戏内菜单](docs/images/android/in-game-menu.jpg)
-
-**游戏内奖杯列表**（F8 / R3+R2）
-
-![游戏内奖杯列表](docs/images/android/trophies.jpg)
+| 端口启动器 | 游戏内菜单 | 游戏内奖杯列表 |
+|---|---|---|
+| <img src="docs/images/android/launcher.jpg" alt="端口启动器" width="420"> | <img src="docs/images/android/in-game-menu.jpg" alt="游戏内菜单" width="420"> | <img src="docs/images/android/trophies.jpg" alt="游戏内奖杯列表" width="420"> |
+| 屏上虚拟按键按横屏握持重排：△○×□ 在右拇指一掌之内，肩键给食指，⚙ 端口菜单 / 🏆 奖杯 / ⏱ 帧率 在左上角 | Insert / R3+L2：作弊选项、手柄、倍率、性能叠加层 | F8 / R3+R2：游戏内的奖杯列表 |
 
 ## 目录
 
