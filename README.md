@@ -1,6 +1,7 @@
 <p align="center">
-  <img src="packaging/icon/monogram.png" alt="SP" width="160"><br>
-  <img src="docs/images/spartanport-logo.png" alt="SpartanPort" width="600">
+  <img src="packaging/icon/monogram.png" alt="SP" width="130"><br>
+  <img src="docs/images/spartanport-logo.png" alt="SpartanPort" width="520"><br><br>
+  <img src="docs/images/nixport-banner.png" alt="nixport" width="620">
 </p>
 
 # SpartanPort
@@ -25,10 +26,19 @@ and Linux (experimental AppImage).
 > and existing shortcuts keep working. On Linux, the AppImage is now `spartanport-x86_64.AppImage`:
 > update Steam launch options that use the old file name.
 
+## Screenshots
+
+| Host library (the port is imported) | Port launcher | In-game menu | In-game trophy list |
+|---|---|---|---|
+| <img src="docs/images/android/library.jpg" alt="Host library" width="280"> | <img src="docs/images/android/launcher.jpg" alt="Port launcher" width="280"> | <img src="docs/images/android/in-game-menu.jpg" alt="In-game menu" width="280"> | <img src="docs/images/android/trophies.jpg" alt="In-game trophy list" width="280"> |
+| SpartanPort (2.7.0 · arm64) in the nixport library | On-screen buttons laid out for a landscape phone: △○×□ under the right thumb, the shoulders under the index fingers, ⚙ menu / 🏆 trophies / ⏱ fps at the top left | Insert / R3+L2: cheats, controls, multipliers, performance overlay | F8 / R3+R2: the trophy list in the game |
+
 ## Contents
 
 - [SpartanPort](#spartanport)
   - [Contents](#contents)
+  - [Screenshots](#screenshots)
+  - [Android (ARM64, this branch)](#android-arm64-this-branch)
   - [Download and play](#download-and-play)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
   - [What works](#what-works)
@@ -50,6 +60,39 @@ and Linux (experimental AppImage).
   - [How it works](#how-it-works)
   - [Credits](#credits)
   - [License](#license)
+
+## Android (ARM64, this branch)
+
+This branch is the ARM64 Android port of SpartanPort: the phone has no x86-64
+processor, so the game's guest code runs on **FEXCore**, and the graphics still go
+through the shadPS4 core to Vulkan. It is delivered as a **nixport Port package**.
+
+**You need:**
+
+- an ARM64 Android device (tested on a 1904×3040 tablet);
+- the **nixport** host: it provides the rootfs, its glibc, the GPU drivers and the
+  session. If you do not have it yet, download it from the
+  [nixport releases](https://github.com/zFitness/nixport/releases);
+- your own game dump (the folder with `eboot.bin`, `sce_module` and `sce_sys`);
+- a Vulkan 1.3 driver on Android (Turnip is the usual one).
+
+**Steps**
+
+1. **Install the nixport host first**: download the APK from the
+   [nixport releases](https://github.com/zFitness/nixport/releases) and install it on
+   the phone. The first start unpacks the rootfs, which takes a while.
+2. Get `dist/spartanport-port.zip` from this branch's build output: the package root
+   holds `port.json`, exactly one `SpartanPort-arm64.AppImage` and the virtual key
+   layout.
+3. Copy the zip to the phone (`/sdcard/Download/`) and pick it in nixport's
+   **Library → Import Port package**.
+4. The port lands in `files/imports/<id>/`, and its on-screen button layout becomes
+   the default layout for that game.
+5. Start the port's launcher (one entry: **SpartanPort launcher**), choose the game
+   folder, save, and play.
+
+The [Chinese version of this file](README.zh.md) has the full details: what differs
+from upstream, how the on-screen layout is built, and how to import saves from a zip.
 
 ## Download and play
 

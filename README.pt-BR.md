@@ -1,6 +1,7 @@
 <p align="center">
-  <img src="packaging/icon/monogram.png" alt="SP" width="160"><br>
-  <img src="docs/images/spartanport-logo.png" alt="SpartanPort" width="600">
+  <img src="packaging/icon/monogram.png" alt="SP" width="130"><br>
+  <img src="docs/images/spartanport-logo.png" alt="SpartanPort" width="520"><br><br>
+  <img src="docs/images/nixport-banner.png" alt="nixport" width="620">
 </p>
 
 # SpartanPort
@@ -9,7 +10,7 @@
   <a href="https://trendshift.io/repositories/299469?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-299469" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/299469/daily?language=C%2B%2B" alt="FelipePrado0%2FSpartanPort | Trendshift" width="250" height="55"/></a>
 </div>
 
-[English](https://github.com/FelipePrado0/SpartanPort/blob/main/README.md) | **Português (Brasil)** | [Español](https://github.com/FelipePrado0/SpartanPort/blob/main/README.es.md)
+[English](https://github.com/FelipePrado0/SpartanPort/blob/main/README.md) | **Português (Brasil)** | [Español](https://github.com/FelipePrado0/SpartanPort/blob/main/README.es.md) | [简体中文](README.zh.md)
 
 **SpartanPort** é um port não oficial para PC de **God of War III Remastered** (PlayStation 4) para Windows 10/11
 e Linux (AppImage experimental).
@@ -24,10 +25,19 @@ e Linux (AppImage experimental).
 > estavam, e os atalhos existentes continuam funcionando. No Linux, a AppImage agora é
 > `spartanport-x86_64.AppImage`: atualize as opções de inicialização do Steam que usam o nome antigo.
 
+## Capturas de tela
+
+| Biblioteca do host (o port já importado) | Launcher do port | Menu dentro do jogo | Lista de troféus no jogo |
+|---|---|---|---|
+| <img src="docs/images/android/library.jpg" alt="Biblioteca do host" width="280"> | <img src="docs/images/android/launcher.jpg" alt="Launcher do port" width="280"> | <img src="docs/images/android/in-game-menu.jpg" alt="Menu dentro do jogo" width="280"> | <img src="docs/images/android/trophies.jpg" alt="Lista de troféus no jogo" width="280"> |
+| SpartanPort (2.7.0 · arm64) na biblioteca do nixport | Botões na tela montados para um celular deitado: △○×□ sob o polegar direito, os ombros sob os dedos indicadores, ⚙ menu / 🏆 troféus / ⏱ fps no canto superior esquerdo | Insert / R3+L2: cheats, controles, multiplicadores, overlay de performance | F8 / R3+R2: a lista de troféus dentro do jogo |
+
 ## Sumário
 
 - [SpartanPort](#spartanport)
   - [Sumário](#sumário)
+  - [Capturas de tela](#capturas-de-tela)
+  - [Android (ARM64, este branch)](#android-arm64-este-branch)
   - [Baixar e jogar](#baixar-e-jogar)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
   - [O que funciona](#o-que-funciona)
@@ -49,6 +59,40 @@ e Linux (AppImage experimental).
   - [Como funciona](#como-funciona)
   - [Créditos](#créditos)
   - [Licença](#licença)
+
+## Android (ARM64, este branch)
+
+Este branch é o port de SpartanPort para Android ARM64: o celular não tem processador
+x86-64, então o código do jogo roda sobre o **FEXCore**, e os gráficos continuam passando
+pelo núcleo do shadPS4 até o Vulkan. A entrega é um **Port package do nixport**.
+
+**Você precisa:**
+
+- de um aparelho Android ARM64 (testado num tablet de 1904×3040);
+- do host **nixport**: ele traz o rootfs, o glibc dele, os drivers de GPU e a sessão.
+  Se ainda não tem, baixe nas
+  [releases do nixport](https://github.com/zFitness/nixport/releases);
+- do seu próprio dump do jogo (a pasta com `eboot.bin`, `sce_module` e `sce_sys`);
+- de um driver Vulkan 1.3 no Android (o Turnip é o mais comum).
+
+**Passos**
+
+1. **Instale primeiro o host nixport**: baixe o APK das
+   [releases do nixport](https://github.com/zFitness/nixport/releases) e instale no
+   celular. A primeira abertura descompacta o rootfs e demora um pouco.
+2. Pegue `dist/spartanport-port.zip` na saída de build deste branch: a raiz do pacote
+   tem `port.json`, exatamente um `SpartanPort-arm64.AppImage` e o layout dos botões
+   na tela.
+3. Passe o zip para o celular (`/sdcard/Download/`) e escolha-o no nixport, em
+   **Biblioteca → Importar pacote de Port**.
+4. O port fica em `files/imports/<id>/`, e o layout dos botões na tela passa a ser o
+   layout padrão desse jogo.
+5. Abra o launcher do port (uma entrada só: **SpartanPort launcher**), escolha a pasta
+   do jogo, salve e jogue.
+
+A [versão em chinês deste arquivo](README.zh.md) tem os detalhes completos: o que
+muda em relação ao upstream, como o layout na tela foi montado e como importar saves
+de um zip.
 
 ## Baixar e jogar
 
