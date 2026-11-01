@@ -20,6 +20,7 @@
   },
   "virtualKeys": "virtualkeys.json",
   "logs": [
-    "home/gport/logs/launch.log"
+    "home/gport/logs/launch.log",
+    "home/gport/user/last_run.log"
   ]
 }

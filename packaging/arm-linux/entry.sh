@@ -50,6 +50,9 @@ launch_env() {
     fi
     [ -f "$CONFIG" ] || : > "$CONFIG"
     export SPARTAN_PORT_DIR="$TREE" SPARTAN_DATA_DIR="$DATA" SPARTAN_HOME="$GHOME"
+    # 上游的慢等待诊断（src/runtime_thread.c）：guest 的等待超过这个毫秒数就打印是哪一把锁/条件
+    # 变量卡住了——FEX 路径上黑屏时进程还活着但不出帧，靠它能看出卡在哪。
+    export SPARTAN_SLOW_WAITS="${SPARTAN_SLOW_WAITS:-2000}"
     export SPARTAN_CONFIG="$CONFIG" SPARTAN_USER_DIR="$DATA/user" SPARTAN_LOG_DIR="$DATA/logs"
     export SPARTAN_GAME_DIR="$GAME_DIR"
     # guest glibc：桌面同款 hwcaps 关闭（FEXCore 下不受支持指令）

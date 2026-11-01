@@ -257,6 +257,14 @@ mkdir -p "$SPARTAN_DATA_DIR" "$SPARTAN_HOME"
   && sh "./$program/entry.sh" info patches | python3 -m json.tool >/dev/null )
 echo "    verb smoke OK"
 
+# 宿主仓的 config.sh 用组件元数据（build/meta.json）算 rootfs 的 glibc 主版本
+# （NXP_MAX_GLIBC，Port 的符号天花板）；那份元数据不在端口仓这边 ⇒ 用 sysroot 的 glibc
+# 版本（同源：Debian trixie = rootfs 的那一份）。
+if [[ -z ${NXP_MAX_GLIBC:-} ]]; then
+    _major=$(sed -n 's/^#define[[:space:]]*__GLIBC__[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$sysroot/usr/include/features.h" 2>/dev/null | head -1)
+    _minor=$(sed -n 's/^#define[[:space:]]*__GLIBC_MINOR__[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$sysroot/usr/include/features.h" 2>/dev/null | head -1)
+    [[ -n $_major ]] && export NXP_MAX_GLIBC="$_major.${_minor:-0}"
+fi
 # AppImage 组装：宿主管线（glibc 天花板 + 排除清单 + mksquashfs + runtime + 魔数）。
 # macOS 无 binutils 的 readelf —— 用 brew llvm 的 llvm-readelf 垫一层。
 # 宿主仓（nixport）里的 AppImage 组包脚本：默认找同级目录 ../fexdroid，CI 里用
@@ -269,7 +277,10 @@ readelf_src=$(command -v readelf || { for c in "$(brew --prefix llvm 2>/dev/null
 ln -sf "$readelf_src" "$shim/readelf"
 mkdir -p "$dist"
 appimage_out=$out/pkg/SpartanPort-arm64.AppImage
-PATH="$shim:$PATH" bash "$fexdroid_tools/scripts/build-port-appimage.sh" "$appdir" "$appimage_out"
+# 绝对路径：宿主脚本会先 cd 到它自己的仓库根，相对路径会找不到。
+appdir_abs=$(cd "$appdir" && pwd)
+appimage_abs="$appimage_out"
+PATH="$shim:$PATH" bash "$fexdroid_tools/scripts/build-port-appimage.sh" "$appdir_abs" "$appimage_abs"
 
 # Port 分发包 = .zip：包根含 port.json、恰好一个 .AppImage，以及可选的虚拟按键布局
 # （Port打包规范.md §2/§3.2/§6.1；归档形态只有 .zip 一种——tar/tar.gz 不再是导入通道，
