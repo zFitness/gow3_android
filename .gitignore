@@ -31,3 +31,4 @@ patches.json
 !packaging/icon/monogram.png
 /.vscode
 
+.local-deps
