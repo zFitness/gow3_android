@@ -73,7 +73,7 @@ Slow wait: mutex lock 2500.0 ms, thread '...' mutex 4397019136
 | 症状 | 日志特征 | 结论 |
 |---|---|---|
 | 黑屏但进程活着，帧计数冻结 | 无 STOP，可能有一波 Slow wait | GPU 侧卡住的前兆；等它走到下一行 |
-| 闪退，退出码 **23** | `GPU <Critical> vk_semaphore/vk_scheduler … ErrorDeviceLost / Device lost during submit` + 前面一波全线程 Slow wait | **Vulkan 设备丢失**（Turnip/GPU 出事），不是 guest 逻辑、不是我们的 C++ 崩 |
+| 闪退，退出码 **23**（实例：deferred_readback=1，Adreno 830，已修） | `GPU <Critical> vk_semaphore/vk_scheduler … ErrorDeviceLost / Device lost during submit` + 前面一波全线程 Slow wait | **Vulkan 设备丢失**（Turnip/GPU 出事），不是 guest 逻辑、不是我们的 C++ 崩 |
 | 闪退，栈里有 `libvulkan_freedreno.so` | backtrace 顶部是驱动帧 | 驱动内崩：我们提交了驱动不认的东西（同步/图像状态），或驱动 bug |
 | `STOP: watchdog timeout; thread stacks:` | probe 的 alarm 看门狗（默认启动后 10 秒一次性） | 启动期卡死；运行期不重挂 |
 | 读档/存档点附近卡 | `SaveDataDialog…` / `AutoSaveHDD` / `SceFiosIO` Slow wait | 存档 I/O 路径；对照关自动存档试试 |
@@ -82,7 +82,7 @@ Slow wait: mutex lock 2500.0 ms, thread '...' mutex 4397019136
 
 | 键 | 默认 | 关掉验证什么 |
 |---|---|---|
-| `deferred_readback` | 1 | 延迟回读（GPU 日志会打 `deferred image readback enabled`） |
+| `deferred_readback` | 上游 1 / **设备线 0** | 延迟回读（GPU 日志会打 `deferred image readback enabled`）。**已确认**：Adreno 830 的 Turnip 上开着它会 Vulkan 设备丢失（2026-11-01 两次事故：黑屏帧冻结 / 退出码 23 的 ErrorDeviceLost；关掉后长玩未复现），设备线默认已改 0 |
 | `stale_readback` | 1 | 旧帧回读（CPU 读上一帧拷贝） |
 | `async_shaders` | 1 | 异步着色/绘制准备（`draw preparation workers: N`） |
 | `readback_linear` | 1 | 端口自己的读回线性化（emulator flag `SPARTAN_READBACK_LINEAR`） |

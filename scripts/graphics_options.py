@@ -86,6 +86,11 @@ def default_ini_values():
         values['render_resolution'] = DEVICE_DEFAULTS['render_resolution']
         values['engine_fps'] = DEVICE_DEFAULTS['engine_fps']
         values['rcas'] = '0'
+        # gport: 上游 3.0.0 的延迟回读（deferred image readback）在 Adreno 830 的 Turnip 上
+        # 触发 Vulkan 设备丢失：2026-11-01 平板上两次事故（黑屏帧冻结 / 退出码 23 的
+        # ErrorDeviceLost）都在它开着时复现，关掉后长时间游玩未再复现。设备线默认关；
+        # 桌面构建保持上游的值。见 docs/nixport/01-debug-playbook.md。
+        values['deferred_readback'] = '0'
     return values
 
 
