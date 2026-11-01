@@ -88,14 +88,21 @@ class OverlayScaleTest(unittest.TestCase):
                 self.assertGreaterEqual(scale, 1.0, 'the tier must not scale the overlay down')
 
     def test_the_menu_still_fits_the_screen(self):
-        """The menu is capped by the work area, so the base size cannot overflow a small screen."""
+        """The menu is capped by the work area, so the base size cannot overflow a small screen.
+
+        The base sizes follow upstream's layout (they change with the menu's rows), so the test
+        reads them out of the source instead of pinning numbers: what matters is that the window
+        is min(base size, work area) on both axes.
+        """
         source = self.source()
-        self.assertIn('std::min(760.0f * base_scale, viewport->WorkSize.x * 0.95f)', source)
-        self.assertIn('std::min(680.0f * base_scale, viewport->WorkSize.y * 0.9f)', source)
+        width_rule = re.search(r'std::min\((\d+\.\d+f) \* (?:base_scale|px), viewport->WorkSize\.x \* (0\.\d+f)\)', source)
+        self.assertIsNotNone(width_rule, 'the menu window is no longer capped by the work area width')
+        height_rule = re.search(r'std::min\((\d+\.\d+f) \* (?:base_scale|px), viewport->WorkSize\.y \* (0\.\d+f)\)', source)
+        self.assertIsNotNone(height_rule, 'the menu window is no longer capped by the work area height')
         for width, height in ((1600, 720), (1080, 1080)):
             with self.subTest(screen=(width, height)):
-                menu_width = min(760.0, width * 0.95)
-                menu_height = min(680.0, height * 0.9)
+                menu_width = min(float(width_rule.group(1).rstrip('f')), width * float(width_rule.group(2).rstrip('f')))
+                menu_height = min(float(height_rule.group(1).rstrip('f')), height * float(height_rule.group(2).rstrip('f')))
                 self.assertLessEqual(menu_width, width)
                 self.assertLessEqual(menu_height, height)
 

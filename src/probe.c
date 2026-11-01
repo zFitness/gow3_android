@@ -14,13 +14,13 @@
 #include "gport_guest_cpu.h"
 #include "orb_hook.h"
 #include "cheat_hook.h"
-#include "actor_hook.h"
 #include "qte_hook.h"
-#include "menu_hook.h"
-#include "damage_hook.h"
 #include "switch_hook.h"
+#include "actor_hook.h"
 #include "player_hook.h"
 #include "ledge_hook.h"
+#include "damage_hook.h"
+#include "menu_hook.h"
 #include "graphics_hook.h"
 #include "gpu/spartanportgpu.h"
 #if !defined(__GNUC__)
@@ -357,6 +357,7 @@ extern void spartanport_stat_multipliers_status(int damage, int orb_pickup);
 extern uintptr_t spartanport_qte_state_address(void);
 extern void spartanport_qte_status(int supported);
 extern uintptr_t spartanport_auto_qte_flag(void);
+extern void spartanport_engine_fps_globals(uintptr_t fps, uintptr_t rounded);
 extern uintptr_t spartanport_switch_state_address(void);
 extern void spartanport_switch_status(int supported);
 extern ABI int spartanport_switch_input(const unsigned char *branch, uintptr_t caller);
@@ -365,7 +366,6 @@ extern ABI const unsigned char *spartanport_switch_queue(const unsigned char *br
 /* 暂停菜单的 "Exit to Desktop" 行（src/menu_hook.h）：菜单脚本解释器的 builtin 调用位点。
  * 行本身由 scripts/pause_menu.py 打在 R_UI.WAD 里（挂载即出现），位点钩子负责把那一行
  * 点的 builtin 0xfff（游戏的 provider 表里没有这个 id）变成"结束进程"。 */
-static const char *pause_menu_wad;  /* --pause-menu 的 WAD 路径；NULL: 不装 */
 
 /* 结束进程的方式与 restart 一样：GPU、音频与 guest 线程都还在跑，不走析构。 */
 static void menu_quit(void) {
@@ -505,6 +505,7 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
         spartanport_cheat_status(id);
         printf("Cheats: %s ready (live toggle, initially disabled unless saved)\n", spartanport_cheat_names[id]);
     }
+}
 /* The upgrade menu's open flag (src/graphics_hook.h): Texture Quality skips its LOD bias while it
  * is set (texture_cache.cpp), so the red orb medallion stays sharp. */
 extern void spartanport_power_up_menu_global(uintptr_t flag);
@@ -554,6 +555,128 @@ static void install_actor_watch(Segment *segments, uint64_t count, uint64_t size
     spartanport_actor_status(1);
     printf("Health display: damage hook ready (enemy health bar in the menu)\n");
 }
+
+static void install_orb_multiplier(Segment *segments, uint64_t count, uint64_t size) {
+    /* setter 与三个 call 位点都由签名定位（上游做法），并校验每个 call 仍指向 setter。 */
+    uint64_t calls[3];
+    const uint64_t setter_at = spartanport_orb_find(image, size, calls);
+    if (setter_at == UINT64_MAX) {
+        printf("Red orbs: multiplier unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    for (unsigned i = 0; i < 3; ++i) {
+        if (!mapped(segments, count, calls[i], 5)) return;
+    }
+    /* SysV call sites: preserve the receiver across the helper, then tail-call the original
+     * setter. Its cap and upgrade notifications remain in the game's own code. */
+    unsigned char *stub = allocate(page_size);
+    uintptr_t helper = (uintptr_t)spartanport_orbs_gain, setter = (uintptr_t)(image + setter_at);
+    unsigned char code[26];
+    spartanport_orb_build_stub(code, helper, setter);
+    int32_t displacements[3];
+    for (unsigned i = 0; i < 3; ++i) {
+        int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + calls[i] + 5);
+        if (delta < INT32_MIN || delta > INT32_MAX) {
+            printf("Red orbs: multiplier unavailable (hook outside relative-call range)\n");
+            return;
+        }
+        displacements[i] = (int32_t)delta;
+    }
+    memcpy(stub, code, sizeof(code));
+    protect(stub, page_size, 5);
+    for (unsigned i = 0; i < 3; ++i)
+        memcpy(image + calls[i] + 1, &displacements[i], 4);
+    spartanport_orbs_status(1);
+    printf("Red orbs: live multiplier ready (3 validated gain paths, 0.1x to 100x)\n");
+}
+/* Writes a jump from image+at to `stub`; the rest of the replaced bytes become nops (the stub
+ * replays them). 0 when the stub is out of relative-jump range. */
+static int install_jump(uint64_t at, unsigned length, unsigned char *stub) {
+    const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + at + 5);
+    if (delta < INT32_MIN || delta > INT32_MAX) return 0;
+    const int32_t relative = (int32_t)delta;
+    image[at] = 0xe9;
+    memcpy(image + at + 1, &relative, 4);
+    memset(image + at + 5, 0x90, length - 5);
+    return 1;
+}
+
+/* Options > Graphics (src/graphics_hook.h): bloom and motion blur, toggled live through bytes the
+ * settings own. A site whose code does not match leaves its row "Unavailable". */
+extern uintptr_t spartanport_graphics_flag(unsigned id);
+extern void spartanport_graphics_status(unsigned id);
+static void install_graphics(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t blur_at = spartanport_signature_find(image, size, &spartanport_motion_blur_site);
+    const uint64_t bloom_at = spartanport_signature_find(image, size, &spartanport_bloom_site);
+    const uint64_t shadows_at = spartanport_signature_find(image, size, &spartanport_shadows_site);
+    /* Same prologue bytes as the motion blur site. */
+    int shadows = shadows_at != UINT64_MAX && mapped(segments, count, shadows_at, SPARTAN_SHADOWS_HOOK_LENGTH) &&
+                  spartanport_motion_blur_signature_match(image + shadows_at, size - shadows_at);
+    int blur = blur_at != UINT64_MAX && mapped(segments, count, blur_at, 48) &&
+               spartanport_motion_blur_signature_match(image + blur_at, size - blur_at);
+    int bloom = bloom_at != UINT64_MAX && mapped(segments, count, bloom_at, SPARTAN_BLOOM_HOOK_LENGTH) &&
+                spartanport_bloom_signature_match(image + bloom_at, size - bloom_at);
+    uint64_t gate = 0, queued = 0;
+    if (blur) {
+        gate = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_GATE);
+        queued = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_QUEUED);
+        blur = mapped(segments, count, gate, 4) && mapped(segments, count, queued, 4);
+    }
+    if (!blur && !bloom && !shadows) {
+        puts("Graphics: bloom, motion blur and shadows toggles unavailable (code not found in this eboot.bin)");
+        return;
+    }
+    unsigned char *stubs = allocate(page_size);
+    if (blur)
+        spartanport_motion_blur_build_stub(stubs, spartanport_graphics_flag(SPARTAN_GRAPHICS_MOTION_BLUR),
+                                           (uintptr_t)(image + gate), (uintptr_t)(image + queued),
+                                           (uintptr_t)(image + blur_at + SPARTAN_MOTION_BLUR_HOOK_LENGTH));
+    if (bloom)
+        spartanport_bloom_build_stub(stubs + 256, spartanport_graphics_flag(SPARTAN_GRAPHICS_BLOOM),
+                                     (uintptr_t)(image + bloom_at + SPARTAN_BLOOM_HOOK_LENGTH));
+    if (shadows)
+        spartanport_shadows_build_stub(stubs + 768, spartanport_graphics_flag(SPARTAN_GRAPHICS_SHADOWS),
+                                       (uintptr_t)(image + shadows_at + SPARTAN_SHADOWS_HOOK_LENGTH));
+    protect(stubs, page_size, 5);
+    blur = blur && install_jump(blur_at, SPARTAN_MOTION_BLUR_HOOK_LENGTH, stubs);
+    bloom = bloom && install_jump(bloom_at, SPARTAN_BLOOM_HOOK_LENGTH, stubs + 256);
+    shadows = shadows && install_jump(shadows_at, SPARTAN_SHADOWS_HOOK_LENGTH, stubs + 768);
+    if (blur) spartanport_graphics_status(SPARTAN_GRAPHICS_MOTION_BLUR);
+    if (bloom) spartanport_graphics_status(SPARTAN_GRAPHICS_BLOOM);
+    if (shadows) spartanport_graphics_status(SPARTAN_GRAPHICS_SHADOWS);
+    printf("Graphics: bloom toggle %s, motion blur toggle %s, shadows toggle %s\n", blur ? "ready" : "unavailable",
+           bloom ? "ready" : "unavailable", shadows ? "ready" : "unavailable");
+}
+
+/* Damage dealt/taken and green/blue/gold orb multipliers (src/damage_hook.h, src/orb_hook.h):
+ * the stubs read the menu's floats directly, so changes apply on the next hit or pickup. */
+static void install_stat_multipliers(Segment *segments, uint64_t count, uint64_t size) {
+    /* 两个位点都按签名定位（上游做法）：固定偏移只在参考构建上成立。 */
+    const uint64_t damage_at = spartanport_signature_find(image, size, &spartanport_damage_site);
+    const uint64_t pickup_at = spartanport_signature_find(image, size, &spartanport_orb_pickup_site);
+    int damage = damage_at != UINT64_MAX && mapped(segments, count, damage_at, SPARTAN_DAMAGE_HOOK_LENGTH) &&
+                 spartanport_damage_signature_match(image + damage_at, size - damage_at);
+    int pickup = pickup_at != UINT64_MAX && mapped(segments, count, pickup_at, SPARTAN_ORB_PICKUP_LENGTH) &&
+                 spartanport_orb_pickup_signature_match(image + pickup_at, size - pickup_at);
+    unsigned char *stubs = damage || pickup ? allocate(page_size) : NULL;
+    if (damage) {
+        spartanport_damage_build_stub(stubs, spartanport_damage_multiplier(1), spartanport_damage_multiplier(0),
+                               (uintptr_t)(image + damage_at + SPARTAN_DAMAGE_HOOK_LENGTH));
+    }
+    if (pickup) {
+        spartanport_orb_pickup_build_stub(stubs + 256, spartanport_orb_pickup_multiplier(0), spartanport_orb_pickup_multiplier(1),
+                                   spartanport_orb_pickup_multiplier(2),
+                                   (uintptr_t)(image + pickup_at + SPARTAN_ORB_PICKUP_LENGTH));
+    }
+    if (stubs) protect(stubs, page_size, 5);
+    damage = damage && install_jump(damage_at, SPARTAN_DAMAGE_HOOK_LENGTH, stubs);
+    pickup = pickup && install_jump(pickup_at, SPARTAN_ORB_PICKUP_LENGTH, stubs + 256);
+    spartanport_stat_multipliers_status(damage, pickup);
+    printf("Multipliers: damage %s, green/blue/gold orbs %s\n", damage ? "ready" : "unavailable",
+           pickup ? "ready" : "unavailable");
+}
+/* QTE 提示（src/qte_hook.h）：提示的 update 里记心跳、旋转判定里作答——启动器的摇杆提示与
+ * Automatic QTE 都靠它。两处要么都装上，要么都不装；装上之前它们什么都不做。返回是否装成。 */
 
 /* Kratos' object (src/player_hook.h), for the Cronos blade pull cap in runtime_pad.c. */
 static void install_player_hook(Segment *segments, uint64_t count, uint64_t size) {
@@ -708,8 +831,31 @@ static void install_auto_qte_hooks(Segment *segments, uint64_t count, uint64_t s
     printf("Automatic QTE: ready for %d of %d prompt kinds (menu, Game)\n", ready + rotation, AUTO_QTE_SITES + 1);
 }
 
-/* Switch attacks (src/switch_hook.h): L1 + a d-pad direction and L1 + Cross take the branches to
- * the switch attacks. Installed only with SPARTAN_SWITCH_ATTACKS=1; all three or none. */
+/* 暂停菜单的 "Exit to Desktop"（src/menu_hook.h）：在菜单脚本解释器的 builtin 调用位点
+ * （签名扫描定位）改写 11 字节为跳板，stub 里按 function id 分发（0xfff → 退出进程，
+ * 0xf00..0xf60 / 0xffd / 0xffe → 我们的 settings provider，其余原样重放），再跳回原指令
+ * 流。钩子装好之后才把打好补丁的 R_UI.WAD 挂上去（否则那行点了没人处理）。 */
+static const uintptr_t menu_vtable[4] = {0, 0, 0, (uintptr_t)menu_setting};
+static const uintptr_t *menu_provider = menu_vtable;
+static void install_menu_exit(Segment *segments, uint64_t count, uint64_t size, const char *wad) {
+    const uint64_t at = spartanport_signature_find(image, size, &spartanport_menu_site);
+    if (at == UINT64_MAX || !mapped(segments, count, at, SPARTAN_MENU_HOOK_LENGTH) ||
+        !spartanport_menu_signature_match(image + at, size - at)) {
+        printf("Pause menu: Exit to Desktop unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    unsigned char *stub = allocate(page_size);
+    spartanport_menu_build_stub(stub, (uintptr_t)menu_quit, (uintptr_t)(image + at + SPARTAN_MENU_HOOK_LENGTH),
+                               (uintptr_t)&menu_provider);
+    protect(stub, page_size, 5);
+    if (!install_jump(at, SPARTAN_MENU_HOOK_LENGTH, stub)) {
+        puts("Pause menu: Exit to Desktop unavailable (hook outside relative-jump range)");
+        return;
+    }
+    runtime_file_mount("/app0/EXEC/WAD/PS4_LE/R_UI.WAD", wad);
+    puts("Pause menu: Exit to Desktop ready");
+}
+
 static void install_switch_hooks(Segment *segments, uint64_t count, uint64_t size) {
     const char *setting = getenv("SPARTAN_SWITCH_ATTACKS");
     if (!setting || strcmp(setting, "1")) return;
@@ -759,25 +905,6 @@ static void install_switch_hooks(Segment *segments, uint64_t count, uint64_t siz
     spartanport_switch_status(1);
     printf("Switch attacks: hooks ready (input check 0x%llx, input queue 0x%llx, d-pad select 0x%llx)\n",
            (unsigned long long)sites[0], (unsigned long long)sites[1], (unsigned long long)sites[2]);
-}
-
-static void install_orb_multiplier(Segment *segments, uint64_t count, uint64_t size) {
-    uint64_t calls[3];
-    const uint64_t setter_at = spartanport_orb_find(image, size, calls);
-    if (setter_at == UINT64_MAX) {
-        printf("Red orbs: multiplier unavailable (code not found in this eboot.bin)\n");
-        return;
-    }
-    unsigned char *stub = allocate(page_size);
-    spartanport_menu_build_stub(stub, (uintptr_t)menu_quit, (uintptr_t)(image + at + SPARTAN_MENU_HOOK_LENGTH),
-                               (uintptr_t)&menu_provider);
-    protect(stub, page_size, 5);
-    if (!install_jump(at, SPARTAN_MENU_HOOK_LENGTH, stub)) {
-        puts("Pause menu: Exit to Desktop unavailable (hook outside relative-jump range)");
-        return;
-    }
-    runtime_file_mount("/app0/EXEC/WAD/PS4_LE/R_UI.WAD", wad);
-    puts("Pause menu: Exit to Desktop ready");
 }
 /* G3PATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
@@ -910,6 +1037,7 @@ static void install_auto_qte_hooks_fex(Segment *segments, uint64_t count, uint64
                                               SPARTAN_QTE_CIRCLE_LENGTH};
     const char *names[AUTO_QTE_SITES] = {"button", "repeated press", "held press", "Circle struggle"};
     const uintptr_t automatic = spartanport_auto_qte_flag();
+    SpartanQteState *state = (SpartanQteState *)spartanport_qte_state_address();
     unsigned char *stubs = allocate(page_size);
     uint64_t sites[AUTO_QTE_SITES];
     int ready = 0;
@@ -922,11 +1050,13 @@ static void install_auto_qte_hooks_fex(Segment *segments, uint64_t count, uint64
         }
         unsigned char *stub = stubs + i * 128;
         const uintptr_t resume = (uintptr_t)(image + sites[i] + lengths[i]);
-        if (i == 0) spartanport_qte_build_timed_stub(stub, automatic, resume);
+        /* The sites are in SPARTAN_QTE_COUNT_* order: each stub counts its kind's frames. */
+        const uintptr_t frames = (uintptr_t)&state->kinds[i];
+        if (i == 0) spartanport_qte_build_timed_stub(stub, frames, automatic, resume);
         else if (i == 1) spartanport_qte_build_repeat_stub_fex(stub, automatic,
                                                     (uintptr_t)(image + spartanport_qte_call_target(image + sites[i], sites[i])), resume);
-        else if (i == 2) spartanport_qte_build_charged_stub(stub, automatic, resume);
-        else spartanport_qte_build_circle_stub(stub, automatic, resume, (uintptr_t)(image + sites[i] + SPARTAN_QTE_CIRCLE_SKIP));
+        else if (i == 2) spartanport_qte_build_charged_stub(stub, frames, automatic, resume);
+        else spartanport_qte_build_circle_stub(stub, frames, automatic, resume, (uintptr_t)(image + sites[i] + SPARTAN_QTE_CIRCLE_SKIP));
     }
     protect(stubs, page_size, 5);
     gport_guest_cpu_code((uintptr_t)stubs, page_size);
@@ -1060,69 +1190,6 @@ static void install_orb_multiplier_fex(Segment *segments, uint64_t count, uint64
     }
     spartanport_orbs_status(1);
     puts("FEX Red orbs: live multiplier ready (3 validated gain paths, 0.1x to 100x)");
-/* Options > Graphics (src/graphics_hook.h): bloom and motion blur, toggled live through bytes the
- * settings own. A site whose code does not match leaves its row "Unavailable". */
-extern uintptr_t spartanport_graphics_flag(unsigned id);
-extern void spartanport_graphics_status(unsigned id);
-static void install_graphics(Segment *segments, uint64_t count, uint64_t size) {
-    const uint64_t blur_at = spartanport_signature_find(image, size, &spartanport_motion_blur_site);
-    const uint64_t bloom_at = spartanport_signature_find(image, size, &spartanport_bloom_site);
-    const uint64_t shadows_at = spartanport_signature_find(image, size, &spartanport_shadows_site);
-    /* Same prologue bytes as the motion blur site. */
-    int shadows = shadows_at != UINT64_MAX && mapped(segments, count, shadows_at, SPARTAN_SHADOWS_HOOK_LENGTH) &&
-                  spartanport_motion_blur_signature_match(image + shadows_at, size - shadows_at);
-    int blur = blur_at != UINT64_MAX && mapped(segments, count, blur_at, 48) &&
-               spartanport_motion_blur_signature_match(image + blur_at, size - blur_at);
-    int bloom = bloom_at != UINT64_MAX && mapped(segments, count, bloom_at, SPARTAN_BLOOM_HOOK_LENGTH) &&
-                spartanport_bloom_signature_match(image + bloom_at, size - bloom_at);
-    uint64_t gate = 0, queued = 0;
-    if (blur) {
-        gate = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_GATE);
-        queued = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_QUEUED);
-        blur = mapped(segments, count, gate, 4) && mapped(segments, count, queued, 4);
-    }
-    if (!blur && !bloom && !shadows) {
-        puts("Graphics: bloom, motion blur and shadows toggles unavailable (code not found in this eboot.bin)");
-        return;
-    }
-    unsigned char *stubs = allocate(page_size);
-    if (blur)
-        spartanport_motion_blur_build_stub(stubs, spartanport_graphics_flag(SPARTAN_GRAPHICS_MOTION_BLUR),
-                                           (uintptr_t)(image + gate), (uintptr_t)(image + queued),
-                                           (uintptr_t)(image + blur_at + SPARTAN_MOTION_BLUR_HOOK_LENGTH));
-    if (bloom)
-        spartanport_bloom_build_stub(stubs + 256, spartanport_graphics_flag(SPARTAN_GRAPHICS_BLOOM),
-                                     (uintptr_t)(image + bloom_at + SPARTAN_BLOOM_HOOK_LENGTH));
-    if (shadows)
-        spartanport_shadows_build_stub(stubs + 768, spartanport_graphics_flag(SPARTAN_GRAPHICS_SHADOWS),
-                                       (uintptr_t)(image + shadows_at + SPARTAN_SHADOWS_HOOK_LENGTH));
-    protect(stubs, page_size, 5);
-    blur = blur && install_jump(blur_at, SPARTAN_MOTION_BLUR_HOOK_LENGTH, stubs);
-    bloom = bloom && install_jump(bloom_at, SPARTAN_BLOOM_HOOK_LENGTH, stubs + 256);
-    shadows = shadows && install_jump(shadows_at, SPARTAN_SHADOWS_HOOK_LENGTH, stubs + 768);
-    if (blur) spartanport_graphics_status(SPARTAN_GRAPHICS_MOTION_BLUR);
-    if (bloom) spartanport_graphics_status(SPARTAN_GRAPHICS_BLOOM);
-    if (shadows) spartanport_graphics_status(SPARTAN_GRAPHICS_SHADOWS);
-    printf("Graphics: bloom toggle %s, motion blur toggle %s, shadows toggle %s\n", bloom ? "ready" : "unavailable",
-           blur ? "ready" : "unavailable", shadows ? "ready" : "unavailable");
-}
-/* The pause menu's "Exit to Desktop" row (src/menu_hook.h). Ends the process as the restart
- * does: GPU, audio and guest threads are still running, so no destructors. */
-static void menu_quit(void) {
-    puts("Pause menu: Exit to Desktop");
-    fflush(NULL);
-#ifdef _WIN32
-    TerminateProcess(GetCurrentProcess(),0);
-#endif
-    _exit(0);
-}
-/* Same provider ABI as the interpreter's original vtable call. No VM arguments are consumed. */
-static void ABI menu_setting(void *self, uint16_t function, uint64_t *result, void *args) {
-    (void)self;
-    (void)args;
-    *result = function >= 0xffd ? (uint64_t)spartanportgpu_enemy_health_bar(function == 0xffd)
-                              : spartanportgpu_native_setting(function);
-    if (function == 0xfcb && *result) runtime_restart();
 }
 
 static void install_menu_exit_fex(Segment *segments, uint64_t count, uint64_t size, const char *wad) {
@@ -1239,7 +1306,7 @@ int main(int argc, char **argv) {
 #endif
     int cpu_only = 0, strict_imports = 0, check_imports = 0;
     unsigned timeout_seconds = 10;
-    const char *content_profile=NULL, *app0=NULL, *user_dir=NULL, *patch_file=NULL, *isa_file=NULL, *pause_menu=NULL;
+    const char *content_profile=NULL, *app0=NULL, *user_dir=NULL, *patch_file=NULL, *isa_file=NULL, *pause_menu_wad=NULL;
     const char *mounts[24]; int mount_count=0;  /* glyphs (3) and the switch attack tutorials (16) */
     for (int i = 2; i < argc; ++i) {
         if (!strcmp(argv[i], "--cpu-only")) cpu_only = 1;
@@ -1250,7 +1317,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "--user") && i+1<argc) user_dir=argv[++i];
         else if (!strcmp(argv[i], "--patches") && i+1<argc) patch_file=argv[++i];
         else if (!strcmp(argv[i], "--isa-rewrite") && i+1<argc) isa_file=argv[++i];
-        else if (!strcmp(argv[i], "--pause-menu") && i+1<argc) pause_menu=argv[++i];
+        else if (!strcmp(argv[i], "--pause-menu") && i+1<argc) pause_menu_wad = argv[++i];
         else if (!strcmp(argv[i], "--mount") && i+1<argc) {
             /* guest=host; the guest part never has '=', so the first one splits */
             const char *spec=argv[++i], *eq=strchr(spec,'=');
@@ -1261,7 +1328,6 @@ int main(int argc, char **argv) {
         /* gport: 上游 launcher 会传 --pause-menu <WAD>（游戏内暂停菜单的 Exit-to-Desktop 行：
          * 行本身由 scripts/pause_menu.py 打在 R_UI.WAD 里，位点钩子由 install_menu_exit 装
          * 上——FEX 路径走陷阱，见下）。原来这里"接受并忽略"，现在存值传给安装器。 */
-        else if (!strcmp(argv[i], "--pause-menu") && i+1<argc) { pause_menu_wad = argv[++i]; }
         else { fprintf(stderr, "Unknown option: %s\n", argv[i]); return 1; }
     }
     if (argc < 2) {
@@ -1503,16 +1569,14 @@ int main(int argc, char **argv) {
 if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     /* 引擎帧率的两个全局要在镜像受保护之前定位（签名搜索要连段间空隙一起读）。 */
     if (gpu_enabled) find_engine_fps(segments, ns, size);
-    /* gport: the upgrade menu's flag (upstream 3.0) is found the same way, before the image is
-     * protected; it only reads the image, so it is safe on the JIT path too. */
-    if (gpu_enabled) find_power_up_menu(segments, ns, size);
 #if defined(GUEST_CPU_NATIVE)
     /* These hooks write x86-64 machine-code stubs straight into the image (0xe9 jumps), which is
      * only meaningful when the game's code runs on the host CPU. Under the JIT the image is
-     * translated, so live code patching needs the JIT's own hook path (gport_guest_cpu_hook): the
-     * game runs without the health bar, the orb multipliers and the upstream 3.0 hooks. */
+     * translated, so live code patching needs the JIT's own hook path (gport_guest_cpu_hook):
+     * the FEX branch below installs its own versions of the same hooks. */
     if (gpu_enabled) install_orb_multiplier(segments, ns, size);
     if (gpu_enabled) install_cheats(app0, segments, ns, size);
+    if (gpu_enabled) find_power_up_menu(segments, ns, size);
     if (gpu_enabled) install_actor_watch(segments, ns, size);
     if (gpu_enabled) install_player_hook(segments, ns, size);
     if (gpu_enabled) install_wall_seam_fix(segments, ns, size);
@@ -1520,7 +1584,7 @@ if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     if (gpu_enabled) install_graphics(segments, ns, size);
     if (gpu_enabled) install_auto_qte_hooks(segments, ns, size, install_qte_hooks(segments, ns, size));
     if (gpu_enabled) install_switch_hooks(segments, ns, size);
-    if (gpu_enabled && pause_menu && app0) install_menu_exit(segments, ns, size, pause_menu);
+    if (gpu_enabled && pause_menu_wad && app0) install_menu_exit(segments, ns, size, pause_menu_wad);
 #else
     /* FEX JIT：金手指经 gport_guest_cpu_hook（syscall 陷阱 + rip 重定向到 trampoline stub）
      * 在 install_cheats 中安装；orb/敌血条/伤害倍率安装器仍需各自的 JIT 路径，暂不安装。 */
@@ -1548,8 +1612,11 @@ protect(traps, round_page((import_count + 1) * 32), 5);
     }
     if (!executable_entry) fail("entry is not executable");
     printf("Mapped %" PRIu64 " bytes, %" PRIu64 " segments; applied %" PRIu64 " relocations\n", size, ns, nr);
-    publish_engine_fps();
+    /* 镜像受保护之后：present 线程每帧读那两个帧率全局。 */
+    if (gpu_enabled) publish_engine_fps();
+#if defined(GUEST_CPU_NATIVE)
     publish_power_up_menu();
+#endif
     if (native_libc) {
         for (uint64_t m=0;m<module_count;++m) {
             int init_executable=0;

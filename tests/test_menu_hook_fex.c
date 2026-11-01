@@ -73,21 +73,26 @@ int main(void) {
         puts("FAIL: 0xffc was treated as ours");
         return 1;
     }
-    /* The settings functions of the GBL provider (0) go to our provider. */
+    /* The settings functions of the GBL provider (0) go to our provider: 0xf00..0xff7 (the
+     * provider's whole table) and the toggle/query pair 0xffd/0xffe. */
     if (call(stub, 0xffd, 0) != (uintptr_t)&native_provider ||
         call(stub, 0xffe, 0) != (uintptr_t)&native_provider ||
         call(stub, 0xf00, 0) != (uintptr_t)&native_provider ||
-        call(stub, 0xf60, 0) != (uintptr_t)&native_provider) {
+        call(stub, 0xf60, 0) != (uintptr_t)&native_provider ||
+        call(stub, 0xf70, 0) != (uintptr_t)&native_provider ||
+        call(stub, 0xfb0, 0) != (uintptr_t)&native_provider ||
+        call(stub, 0xfc0, 0) != (uintptr_t)&native_provider ||
+        call(stub, 0xff7, 0) != (uintptr_t)&native_provider) {
         puts("FAIL: the settings functions did not reach our provider");
         return 1;
     }
     /* Only the GBL provider (index 0) is extended: another provider keeps its own entry. */
-    if (call(stub, 0xffe, 1) != 0x2222) {
-        puts("FAIL: another provider's 0xffe was hijacked");
+    if (call(stub, 0xffe, 1) != 0x2222 || call(stub, 0xf90, 1) != 0x2222) {
+        puts("FAIL: another provider's function was hijacked");
         return 1;
     }
     /* Just outside the range: the original lookup. */
-    if (call(stub, 0xf61, 0) != 0x1111 || call(stub, 0xeff, 0) != 0x1111) {
+    if (call(stub, 0xff8, 0) != 0x1111 || call(stub, 0xeff, 0) != 0x1111) {
         puts("FAIL: a function outside our range was hijacked");
         return 1;
     }

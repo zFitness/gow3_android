@@ -164,7 +164,9 @@ PATCH_TEMPLATES = (('720p', (1280, 720), (1920, 1080)), ('1440p', (2560, 1440), 
                    ('4K', (3840, 2160), (3840, 2160)), ('8K', (7680, 4320), (7680, 4320)))
 
 
-def resolution_patch_xml(width, height, source=Path(__file__).resolve().parents[1] / 'patches' / 'CUSA01623.xml'):
+# gport: our patch set is split per title id (patches/God_of_War_III_Remastered_<title id>.xml);
+# upstream's single patches/CUSA01623.xml is gone. The caller passes the game's own file.
+def resolution_patch_xml(width, height, source=Path(__file__).resolve().parents[1] / 'patches' / 'God_of_War_III_Remastered_CUSA01623.xml'):
     """A "Resolution Patch - <width>x<height>" patch file: the smallest built-in resolution patch that
     fits the size, with its sizes and half sizes (bloom) replaced."""
     import re

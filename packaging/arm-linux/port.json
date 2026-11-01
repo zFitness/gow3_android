@@ -2,7 +2,7 @@
   "schema": "nixport.port.v1",
   "id": "spartanport",
   "name": "SpartanPort",
-  "version": "2.7.0",
+  "version": "3.0.0",
   "appimage": "SpartanPort-arm64.AppImage",
   "description": "God of War III Remastered：FEX guest CPU + shadPS4 图形栈的 ARM64 移植；补丁、作弊码、图形、游戏目录全部在启动器内配置",
   "upstream": "https://github.com/FelipePrado0/SpartanPort",

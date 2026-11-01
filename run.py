@@ -227,7 +227,10 @@ def main():
     if upscale := graphics_options.upscaler_render_size(graphics_options.read_ini(env['SPARTAN_CONFIG']), env):
         width, height, output = upscale
         upscale_patch = out / 'upscale-resolution.xml'
-        upscale_patch.write_text(graphics_options.resolution_patch_xml(width, height), encoding='utf-8')
+        # gport: the patch file must be the game's own one (our patch set is per title id).
+        profile = patches.game_profile_for(env['SPARTAN_GAME_DIR'])
+        source = profile[1] if profile else None
+        upscale_patch.write_text(graphics_options.resolution_patch_xml(width, height, source), encoding='utf-8')
         mod_patch_files = [*mod_patch_files, upscale_patch]
         graphics['render_resolution'] = f'{width}x{height}'
         env['SPARTAN_RENDER_RES'] = f'{width}x{height}'

@@ -105,9 +105,10 @@ class GameProfileTests(unittest.TestCase):
 
     def test_gow3_defaults_and_extras(self):
         self.assertEqual(selected_patches(GOW3, '01.02', ''),
-                         ['Bug Fix - Texture Corruption Fix', 'Skip Any Video With X Button', STARTUP])
+                         ['Bug Fix - Texture Corruption Fix', 'High FPS Wall Seam Fix',
+                          'Skip Any Video With X Button', STARTUP])
         self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 720p; Skip Any Video With X Button'),
-                         ['Skip Any Video With X Button', STARTUP, 'Resolution Patch - 720p'])
+                         ['High FPS Wall Seam Fix', 'Skip Any Video With X Button', STARTUP, 'Resolution Patch - 720p'])
         self.assertEqual(selected_patches(GOW3, '01.00', ''), [])
         # The launcher's selection is exact: unchecked defaults stay off.
         self.assertEqual(selected_patches(GOW3, '01.02', 'Skip Any Video With X Button', only=True), ['Skip Any Video With X Button', STARTUP])

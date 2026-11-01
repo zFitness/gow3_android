@@ -98,6 +98,16 @@ end_stage "libgportcpu.so"
 
 # ---- 2/5 libgportgpu.so（shadPS4 video core）------------------------------------------
 begin "libgportgpu.so"
+# 本端口对 FSR-Vulkan 的改动（gpu/patches/fsr-vulkan/*.patch，上游 3.0.0 的 FSR 放大与帧生成
+# 依赖它）：打一次即可，重复跑时先试反向检查（上游 build.sh 同一写法）。
+if [[ -d gpu/third_party/fsr-vulkan ]]; then
+    for patch in gpu/patches/fsr-vulkan/*.patch; do
+        [[ -f $patch ]] || continue
+        if ! git -C gpu/third_party/fsr-vulkan apply --reverse --check "$PWD/$patch" 2>/dev/null; then
+            git -C gpu/third_party/fsr-vulkan apply "$PWD/$patch"
+        fi
+    done
+fi
 # 目标平台开关变了要重新 configure：CMake 的 option 缓存在 build.ninja 里，不重跑不会生效。
 if [[ ! -f $out/gpu/build.ninja ]] || ! grep -q "^SPARTAN_ARM:BOOL=$spartan_arm$" "$out/gpu/CMakeCache.txt" 2>/dev/null; then
     cmake -S gpu -B "$out/gpu" -G Ninja -DCMAKE_TOOLCHAIN_FILE="$tc" \
