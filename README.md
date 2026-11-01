@@ -32,7 +32,7 @@ and Linux (experimental AppImage).
 | Host library (the port is imported) | Port launcher | In-game menu | In-game trophy list |
 |---|---|---|---|
 | <img src="docs/images/android/library.jpg" alt="Host library" width="280"> | <img src="docs/images/android/launcher.jpg" alt="Port launcher" width="280"> | <img src="docs/images/android/in-game-menu.jpg" alt="In-game menu" width="280"> | <img src="docs/images/android/trophies.jpg" alt="In-game trophy list" width="280"> |
-| SpartanPort (2.7.0 · arm64) in the nixport library | On-screen buttons laid out for a landscape phone: △○×□ under the right thumb, the shoulders under the index fingers, ⚙ menu / 🏆 trophies / ⏱ fps at the top left | Insert / R3+L2: cheats, controls, multipliers, performance overlay | F8 / R3+R2: the trophy list in the game |
+| SpartanPort (3.0.0 · arm64) in the nixport library | On-screen buttons laid out for a landscape phone: △○×□ under the right thumb, the shoulders under the index fingers, ⚙ menu / 🏆 trophies / ⏱ fps at the top left | Insert / R3+L2: cheats, controls, multipliers, performance overlay | F8 / R3+R2: the trophy list in the game |
 
 ## Contents
 
@@ -94,7 +94,9 @@ through the shadPS4 core to Vulkan. It is delivered as a **nixport Port package*
    folder, save, and play.
 
 The [Chinese version of this file](README.zh.md) has the full details: what differs
-from upstream, how the on-screen layout is built, and how to import saves from a zip.
+from upstream (including a table of what upstream 3.0.0 ships and what still needs
+the ARM64 rewrite), how the on-screen layout is built, and how to import saves from a
+zip.
 
 ## Download and play
 

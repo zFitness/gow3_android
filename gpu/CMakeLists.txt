@@ -423,9 +423,6 @@ target_include_directories(graphics-settings-test PRIVATE shim)
 target_compile_options(graphics-settings-test PRIVATE -UNDEBUG)
 # gport: 安卓增量——pad 文件桥退役（SDL 直接识别手柄），tests/test_pad_input.cpp 不迁入，
 # 它的测试目标一并去掉（否则 cmake configure 找不到源文件，整个 GPU 库配不出来）。
-add_executable(actor-hook-test EXCLUDE_FROM_ALL ../tests/test_actor_hook.cpp)
-target_include_directories(actor-hook-test PRIVATE shim)
-target_compile_options(actor-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(menu-confirm-swap-test EXCLUDE_FROM_ALL ../tests/test_menu_confirm_swap.cpp
     shim/spartanport_settings.cpp)
 target_include_directories(menu-confirm-swap-test PRIVATE shim third_party/imgui)

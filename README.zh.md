@@ -25,7 +25,7 @@
 | 宿主库（Port 已导入） | 端口启动器 | 游戏内菜单 | 游戏内奖杯列表 |
 |---|---|---|---|
 | <img src="docs/images/android/library.jpg" alt="宿主库" width="280"> | <img src="docs/images/android/launcher.jpg" alt="端口启动器" width="280"> | <img src="docs/images/android/in-game-menu.jpg" alt="游戏内菜单" width="280"> | <img src="docs/images/android/trophies.jpg" alt="游戏内奖杯列表" width="280"> |
-| nixport 的库页里，SpartanPort（2.7.0 · arm64）已导入 | 屏上虚拟按键按横屏握持重排：△○×□ 在右拇指一掌之内，肩键给食指，⚙ 端口菜单 / 🏆 奖杯 / ⏱ 帧率 在左上角 | Insert / R3+L2：作弊选项、手柄、倍率、性能叠加层 | F8 / R3+R2：游戏内的奖杯列表 |
+| nixport 的库页里，SpartanPort（3.0.0 · arm64）已导入 | 屏上虚拟按键按横屏握持重排：△○×□ 在右拇指一掌之内，肩键给食指，⚙ 端口菜单 / 🏆 奖杯 / ⏱ 帧率 在左上角 | Insert / R3+L2：作弊选项、手柄、倍率、性能叠加层 | F8 / R3+R2：游戏内的奖杯列表 |
 
 ## 目录
 
@@ -34,6 +34,7 @@
   - [一句话差异](#一句话差异)
   - [差异对照表](#差异对照表)
   - [我们具体改了什么](#我们具体改了什么)
+  - [上游 3.0.0 在 ARM64 上的状态](#上游-300-在-arm64-上的状态)
   - [当前状态与已知限制](#当前状态与已知限制)
   - [分支说明](#分支说明)
 - [1. 下载与游玩](#1-下载与游玩)
@@ -142,6 +143,21 @@ FEX 执行 guest 代码时这套机制不同，于是这些功能在 FEX 路径�
 
 - `tools/check_migration.py` + `tests/migration/`：把 ARM64 线与参考实现逐函数比对；
 - `tests/test_qte_fex_stub.c`、`tests/test_pause_menu.py`、`tests/test_port_display_fit.py` 等新测试。
+
+### 上游 3.0.0 在 ARM64 上的状态
+
+本分支已把上游 **3.0.0**（`windows-v3.0.0`，489 个提交）合并进来。逐项对照：
+
+| 上游 3.0.0 | ARM64 上的状态 |
+|---|---|
+| 具体尺寸的分辨率补丁（1280x800 … 8K）、**High FPS Wall Seam Fix**、Startup Black Screen、100/120/144/240 FPS 补丁 | ✅ 全部并入我们的 per-title 补丁文件（按签名定位，换构建也能命中） |
+| 高帧率物理修复（QTE 提示期间降到 60 FPS） | ✅ 实现在运行时里，不依赖 guest 钩子 |
+| AMD FSR 放大与 2x 帧生成、移除 DLSS | ✅ 编进 ARM64 版（需 Vulkan 1.3 与支持 FSR 的驱动） |
+| 启动器的手柄映射页、换招攻击选项、新文案 | ✅ Python 启动器侧全部合入，四种语言（含补丁说明）都补齐 |
+| 游戏内 Options > Graphics（Texture Quality / Shadows / Motion Blur / Bloom） | ⚠️ 上游是往 guest 镜像写 x86-64 机器码，FEX JIT 下要像金手指/QTE/敌血条/倍率/暂停菜单那样重做 ARM64 版，本版未做 |
+| 换招攻击（L1 + 方向键 / L1 + 叉） | ⚠️ 同上（x86 钩子） |
+| Cronos 拔刀限速 | ⚠️ 同上（要从 guest 镜像读奎托斯的对象） |
+| Rust 启动器（3.0.0 的新启动器） | ⚠️ 我们继续用 Python 启动器（运行链是 `entry.sh → run.py → launcher`）：Rust 启动器独有的 UI（自动缩放、暗色标题栏）不在包里 |
 
 ### 当前状态与已知限制
 

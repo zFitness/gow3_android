@@ -63,6 +63,10 @@ if [[ -z $boost_dir ]]; then
         boost_dir=$(find "$bp/lib/cmake" -maxdepth 1 -type d -name 'Boost-*' -print | sort | tail -n 1)
     fi
 fi
+if [[ -z $boost_dir ]]; then
+    # Linux（CI）：系统 Boost 的 cmake 目录（Debian/Ubuntu 装在 /usr/lib/<triplet>/cmake/Boost-*）。
+    boost_dir=$(find /usr/lib /usr/local/lib -maxdepth 3 -type d -name 'Boost-*' -path '*/cmake/*' 2>/dev/null | sort | tail -n 1)
+fi
 # conda 环境会漏 x86-64 专属 flags 进交叉编译（见 build_arm64.sh 的同款处理）。
 unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH CMAKE_PREFIX_PATH
 

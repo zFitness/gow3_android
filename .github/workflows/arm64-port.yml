@@ -1,0 +1,98 @@
+# ARM64 端口包：打 tag（v*）自动交叉构建并挂到 Release 上。
+#
+# 产物是 nixport 的 Port 包（port.json + SpartanPort-arm64.AppImage + virtualkeys.json），
+# 宿主（fexdroid）导入即用。跟上游的 linux-appimage.yml 同构，但交叉编译到 aarch64，
+# 并且带上我们的虚拟按键布局。
+#
+# 触发方式：
+#   - push 一个 v* 的 tag：构建并发布（或更新）该 tag 的 Release。
+#   - 手动（workflow_dispatch）：只构建，产物作为 workflow artifact。
+#
+# 版本号取自 packaging/arm-linux/port.json 的 version 字段（与包里的 manifest 一致），
+# 资产名沿用发布惯例：SpartanPort.nixport.<版本>.zip（+ .sha256）。
+name: ARM64 port package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to attach the package to (an existing tag); empty builds only.
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: arm64-port-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Dependencies
+        run: bash packaging/arm-linux/ci-deps.sh
+
+      # 组 AppImage 要用宿主仓的打包脚本（mksquashfs + glibc 天花板 + 排除清单）。
+      - name: Host tools
+        run: |
+          git clone --depth 1 https://github.com/zFitness/nixport.git "$GITHUB_WORKSPACE/../fexdroid"
+          test -x "$GITHUB_WORKSPACE/../fexdroid/scripts/build-port-appimage.sh"
+
+      - name: Build
+        env:
+          # CI 的 runner 在公网，Debian 官方源比国内镜像快。
+          GPORT_DEBIAN_MIRROR: https://deb.debian.org/debian
+          SPARTAN_ARM64_HEADERS: ${{ github.workspace }}/.local-deps/root/usr
+        run: bash packaging/arm-linux/build.sh
+
+      - name: Name and checksum
+        id: package
+        run: |
+          version=$(python3 -c "import json;print(json.load(open('packaging/arm-linux/port.json'))['version'])")
+          mkdir -p dist
+          cp packaging/arm-linux/dist/spartanport-port.zip "dist/SpartanPort.nixport.$version.zip"
+          cd dist && sha256sum "SpartanPort.nixport.$version.zip" | sed 's/  / */' > "SpartanPort.nixport.$version.zip.sha256"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SpartanPort.nixport.${{ steps.package.outputs.version }}
+          path: |
+            dist/SpartanPort.nixport.*.zip
+            dist/SpartanPort.nixport.*.zip.sha256
+          if-no-files-found: error
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          notes="docs/releases/$TAG.md"
+          if [ ! -f "$notes" ]; then
+            notes="docs/releases/$VERSION.md"
+          fi
+          if [ -f "$notes" ]; then
+            gh release create "$TAG" --title "SpartanPort $VERSION (ARM64 / nixport)" --notes-file "$notes" --target "$GITHUB_SHA" || \
+              gh release edit "$TAG" --title "SpartanPort $VERSION (ARM64 / nixport)" --notes-file "$notes"
+          else
+            gh release create "$TAG" --title "SpartanPort $VERSION (ARM64 / nixport)" \
+              --notes "ARM64 port package for nixport, built from \`${GITHUB_SHA::7}\`. Download \`SpartanPort.nixport.$VERSION.zip\` and import it in the host app (nixport)." || \
+              gh release edit "$TAG" --title "SpartanPort $VERSION (ARM64 / nixport)" \
+              --notes "ARM64 port package for nixport, built from \`${GITHUB_SHA::7}\`."
+          fi
+          gh release upload "$TAG" dist/SpartanPort.nixport.$VERSION.zip dist/SpartanPort.nixport.$VERSION.zip.sha256 --clobber
+          gh release view "$TAG" --json url -q .url

@@ -31,7 +31,7 @@ e Linux (AppImage experimental).
 | Biblioteca do host (o port já importado) | Launcher do port | Menu dentro do jogo | Lista de troféus no jogo |
 |---|---|---|---|
 | <img src="docs/images/android/library.jpg" alt="Biblioteca do host" width="280"> | <img src="docs/images/android/launcher.jpg" alt="Launcher do port" width="280"> | <img src="docs/images/android/in-game-menu.jpg" alt="Menu dentro do jogo" width="280"> | <img src="docs/images/android/trophies.jpg" alt="Lista de troféus no jogo" width="280"> |
-| SpartanPort (2.7.0 · arm64) na biblioteca do nixport | Botões na tela montados para um celular deitado: △○×□ sob o polegar direito, os ombros sob os dedos indicadores, ⚙ menu / 🏆 troféus / ⏱ fps no canto superior esquerdo | Insert / R3+L2: cheats, controles, multiplicadores, overlay de performance | F8 / R3+R2: a lista de troféus dentro do jogo |
+| SpartanPort (3.0.0 · arm64) na biblioteca do nixport | Botões na tela montados para um celular deitado: △○×□ sob o polegar direito, os ombros sob os dedos indicadores, ⚙ menu / 🏆 troféus / ⏱ fps no canto superior esquerdo | Insert / R3+L2: cheats, controles, multiplicadores, overlay de performance | F8 / R3+R2: a lista de troféus dentro do jogo |
 
 ## Sumário
 
