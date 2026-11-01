@@ -34,8 +34,23 @@ if [[ ! -f $prefix/include/vk_mem_alloc.h ]]; then
     cmake -S "$dir" -B "$dir/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" >/dev/null
     cmake --install "$dir/build" >/dev/null
 fi
+# Ubuntu 的 robin-map-dev 只装头文件（/usr/include/tsl），不带 cmake 配置 ⇒ 系统里找不到
+# tsl-robin-map 的 cmake 包时，自己写一份最简的（纯头文件库，一个接口目标就够）。
 tsl_dir=$(find /usr/lib /usr/local/lib -maxdepth 4 -type d -name 'tsl-robin-map' -path '*cmake*' 2>/dev/null | head -n 1)
-[[ -n $tsl_dir ]] || die "tsl-robin-map cmake config not found (apt robin-map-dev)"
+if [[ -z $tsl_dir ]]; then
+    [[ -f /usr/include/tsl/robin_map.h ]] || die "tsl-robin-map headers missing (apt robin-map-dev)"
+    tsl_dir="$prefix/share/cmake/tsl-robin-map"
+    mkdir -p "$tsl_dir"
+    cat > "$tsl_dir/tsl-robin-mapConfig.cmake" <<'CMAKE'
+# 手写的最简 cmake 包：tsl-robin-map 是纯头文件库（Ubuntu 的 robin-map-dev 装在
+# /usr/include/tsl），发行版不带 cmake 配置，这里补一个接口目标。
+if(NOT TARGET tsl::robin_map)
+    add_library(tsl::robin_map INTERFACE IMPORTED)
+    set_target_properties(tsl::robin_map PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "/usr/include")
+endif()
+set(tsl-robin-map_FOUND TRUE)
+CMAKE
+fi
 echo "tsl-robin-map: $tsl_dir"
 
 # ---- Boost 的 cmake 目录（build.sh 用 Boost_DIR 找它）---------------------------------
