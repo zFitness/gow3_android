@@ -2,23 +2,30 @@
 //! Home's layer 5 (`home.rs`), the same for both fires. The splash has none (R96): the fire comes
 //! in with the Home, as the splash's flight fades its dark background out.
 
-use iced::futures::executor::block_on;
+#[cfg(feature = "wgpu")]
+use pollster::block_on;
 use iced::mouse;
+#[cfg(feature = "wgpu")]
 use iced::wgpu;
 use iced::widget::canvas::{self, Geometry, Path};
-use iced::widget::{canvas as canvas_widget, container, shader as shader_widget, Id};
+#[cfg(feature = "wgpu")]
+use iced::widget::shader as shader_widget;
+use iced::widget::{canvas as canvas_widget, container, Id};
 use iced::{Color, Element, Fill, Point, Rectangle, Renderer, Size, Theme, Vector};
 
 use crate::ui::app::{Message, State};
 
+#[cfg(feature = "wgpu")]
 mod shader;
 
+#[cfg(feature = "wgpu")]
 pub use shader::FireShader;
 
 /// The fire layer: drawn by a wgpu shader, or by a `canvas` when iced renders with tiny-skia.
 #[derive(Debug)]
 pub enum Fire {
     Canvas(FireCanvas),
+    #[cfg(feature = "wgpu")]
     Shader(FireShader),
 }
 
@@ -32,15 +39,18 @@ impl Fire {
     /// The shader fire when `use_shader` (see [`probe_gpu`]), the canvas fire otherwise.
     pub fn new(use_shader: bool) -> Self {
         if use_shader {
-            Fire::Shader(FireShader::default())
-        } else {
-            Fire::Canvas(FireCanvas::default())
+            #[cfg(feature = "wgpu")]
+            return Fire::Shader(FireShader::default());
+            #[cfg(not(feature = "wgpu"))]
+            return Fire::Canvas(FireCanvas::default());
         }
+        Fire::Canvas(FireCanvas::default())
     }
 
     pub fn set_intensity(&mut self, intensity: f32) {
         match self {
             Fire::Canvas(fire) => fire.set_intensity(intensity),
+            #[cfg(feature = "wgpu")]
             Fire::Shader(fire) => fire.set_intensity(intensity),
         }
     }
@@ -48,6 +58,7 @@ impl Fire {
     pub fn tick(&mut self, dt: f32, size: Size) {
         match self {
             Fire::Canvas(fire) => fire.tick(dt, size),
+            #[cfg(feature = "wgpu")]
             Fire::Shader(fire) => fire.tick(dt, size),
         }
     }
@@ -55,6 +66,7 @@ impl Fire {
     fn sim(&self) -> &FireSim {
         match self {
             Fire::Canvas(fire) => &fire.sim,
+            #[cfg(feature = "wgpu")]
             Fire::Shader(fire) => fire.sim(),
         }
     }
@@ -73,6 +85,7 @@ impl Fire {
     pub fn view(&self) -> Element<'_, Message> {
         let fire: Element<'_, Message> = match self {
             Fire::Canvas(fire) => canvas_widget(fire).width(Fill).height(Fill).into(),
+            #[cfg(feature = "wgpu")]
             Fire::Shader(fire) => shader_widget(fire).width(Fill).height(Fill).into(),
         };
         container(fire)
@@ -95,14 +108,22 @@ pub fn layer_id() -> Id {
 }
 
 /// Whether the fire can be the wgpu shader. Asks the GPU, so call it once, at start-up.
+#[cfg(feature = "wgpu")]
 pub fn probe_gpu() -> bool {
     let backend = std::env::var("ICED_BACKEND").ok();
     use_shader(backend.as_deref(), adapter_found)
 }
 
+/// Without the wgpu feature there is no shader fire, so the canvas fire always.
+#[cfg(not(feature = "wgpu"))]
+pub fn probe_gpu() -> bool {
+    false
+}
+
 /// Whether iced will render with wgpu, the only renderer that draws a shader. `backend_env` is
 /// `ICED_BACKEND`, a comma-separated list iced tries in order, each entry with wgpu then with
 /// tiny-skia; `adapter_found` asks the GPU and is called only when wgpu gets its turn.
+#[cfg(feature = "wgpu")]
 pub fn use_shader(backend_env: Option<&str>, adapter_found: impl FnOnce() -> bool) -> bool {
     let mut candidates = backend_env
         .unwrap_or_default()
@@ -125,6 +146,7 @@ pub fn use_shader(backend_env: Option<&str>, adapter_found: impl FnOnce() -> boo
 
 /// Whether wgpu finds a graphics adapter, asked the way iced asks for its window
 /// (`WGPU_BACKEND`, `WGPU_POWER_PREF`) but without a surface.
+#[cfg(feature = "wgpu")]
 fn adapter_found() -> bool {
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::from_env().unwrap_or(wgpu::Backends::all()),

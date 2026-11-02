@@ -52,10 +52,15 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # 走 DBus 的文件选择框）。ARM64 移植用；上游桌面构建不受影响（特征合并后桌面仍是 gtk3？不——
 # 直接依赖关掉 default 后全仓统一，桌面如需 gtk3 再单独处理）。
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
-iced = { version = "0.14", features = ["wgpu", "tiny-skia", "image", "canvas", "advanced", "tokio"] }
+# gport: wgpu 变成可选——gamescope/DroidDeck 的 WSI 兼容层（vkroots）在 wgpu 建
+# instance 时断言崩溃（2026-11-02 设备实测，signal 6）；启动器 UI 用 tiny-skia
+# CPU 渲染足够。generic 变体构建（build.sh 的 generic 阶段）不带 wgpu。
+iced = { version = "0.14", default-features = false, features = ["tiny-skia", "image", "canvas", "advanced", "tokio", "wayland", "x11"] }
 # The x86 decoder of `runner/isa_rewrite.rs`: the engine and version of the Python's binding, so the
 # sites are the same. `instr_info` gives the flow control and the register numbers and sizes.
 iced-x86 = { version = "=1.21.0", default-features = false, features = ["std", "decoder", "instr_info"] }
+# gport: wgpu 官方推荐的 block_on（iced 默认的 futures executor 关默认特性后不存在）
+pollster = { version = "0.4", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
@@ -111,3 +116,7 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.image]
 opt-level = 3
+
+[features]
+default = ["wgpu"]
+wgpu = ["iced/wgpu", "dep:pollster"]

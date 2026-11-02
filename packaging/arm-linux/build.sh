@@ -339,26 +339,33 @@ PY
 end_stage "$dist/spartanport-port.zip ($(du -m "$dist/spartanport-port.zip" | cut -f1) MB)"
 
 # ---- 6/6 通用 ARM64 Linux AppImage（可选：SPARTAN_GENERIC_APPIMAGE=1）------------
-# 面向普通 aarch64 Linux（桌面发行版，非 nixport）：标准 /lib 解释器、自带 SDL3/ffmpeg/
-# libgport 库、依赖目标系统的 glibc(≥2.41)/X11/xkb 栈。入口 = Rust 启动器（上游模型）。
+# 面向普通 aarch64 Linux 桌面（非 nixport）：标准 /lib 解释器、自带 SDL3/ffmpeg/libgport
+# 依赖、设置写到 ~/.local/share/spartanport（上游 AppRun 同款），键表数据自带。
 if [[ ${SPARTAN_GENERIC_APPIMAGE:-0} = 1 ]]; then
     begin "generic arm64 AppImage (optional)"
     gdir=$out/pkg-generic/spartanport
     rm -rf "$out/pkg-generic"
-    mkdir -p "$gdir/bin/gpu" "$gdir/lib" "$gdir/patches"
+    mkdir -p "$gdir/usr/lib" "$gdir/usr/share/spartanport/bin/gpu" "$gdir/usr/share/spartanport/patches" "$gdir/usr/share/X11/xkb"
     # probe 重链接：不带 nixport 解释器烤入（目标系统提供 /lib/ld-linux-aarch64.so.1）
     "${cc[@]}" -std=c11 -O2 -g -Wall -Wextra -pthread -no-pie "${includes[@]}" -I. -Isrc \
         src/probe.c src/runtime*.c src/vulkan_smoke.c "$out/libatrac9.a" -lm \
         -L"$out/gpu" -lgportgpu -L"$out/fex" -lgportcpu -Wl,-rpath,'$ORIGIN/gpu' -rdynamic \
-        "${libraries[@]}" -o "$gdir/bin/spartanport-probe"
-    # Rust 启动器重链接：不烤解释器（SPARTAN_BAKE_INTERPRETER=0）
-    SPARTAN_BAKE_INTERPRETER=0 bash launcher-rust/build-aarch64.sh
+        "${libraries[@]}" -o "$gdir/usr/share/spartanport/bin/spartanport-probe"
+    # gpu 库（probe 的 rpath $ORIGIN/gpu）
+    install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" \
+        "$gdir/usr/share/spartanport/bin/gpu/"
+    # Rust 启动器重链接：不烤解释器（SPARTAN_BAKE_INTERPRETER=0）+ tiny-skia-only
+    # （SPARTAN_LAUNCHER_NO_WGPU=1，gamescope 的 WSI 兼容层会崩 wgpu，2026-11-02 实测）
+    SPARTAN_BAKE_INTERPRETER=0 SPARTAN_LAUNCHER_NO_WGPU=1 bash launcher-rust/build-aarch64.sh
     install -m755 launcher-rust/target/aarch64-unknown-linux-gnu/release/spartanport-launcher \
-        "$gdir/bin/spartanport-launcher"
-    # 依赖闭包：复用 port 打包的 lib/（NEEDED 递归闭包，已排除 rootfs/目标系统标配）
-    cp -R "$out/lib/." "$gdir/lib/"
-    install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$gdir/bin/gpu/"
-    install -m644 patches/CUSA01623.xml "$gdir/patches/"
+        "$gdir/usr/share/spartanport/spartanport-launcher"
+    # 依赖闭包：bundle() 遍历 probe/启动器的 NEEDED（排除清单外全部进包）
+    bundle "$gdir/usr/share/spartanport/bin/spartanport-probe"
+    mkdir -p "$gdir/usr/lib"
+    cp -R "$out/lib/." "$gdir/usr/lib/"
+    find "$gdir/usr/lib" -name '*.so*' -exec "$llvm_bin/llvm-strip" --strip-unneeded {} + 2>/dev/null || true
+    "$llvm_bin/llvm-strip" --strip-unneeded "$gdir/usr/share/spartanport/bin/spartanport-probe" \
+        "$gdir/usr/share/spartanport/spartanport-launcher" 2>/dev/null || true
     # 键表数据（xkb-data）：极简系统可能没有 ⇒ 自带 + AppRun 指路（XKB_CONFIG_ROOT）。
     # 来源：本地缓存 .local-deps/xkb-data/（缺失时从 Debian 镜像拉一次并缓存）。
     xkb_src=$root/.local-deps/xkb-data/usr/share/X11/xkb
@@ -370,17 +377,21 @@ if [[ ${SPARTAN_GENERIC_APPIMAGE:-0} = 1 ]]; then
         cp -R "$xkb_tmp/usr/share/X11/xkb" "$xkb_src"
         rm -rf "$xkb_tmp"
     fi
-    mkdir -p "$gdir/share/X11"
-    cp -R "$xkb_src" "$gdir/share/X11/xkb"
-    find "$gdir/lib" "$gdir/bin" -name '*.so*' -exec "$llvm_bin/llvm-strip" --strip-unneeded {} + 2>/dev/null || true
-    "$llvm_bin/llvm-strip" --strip-unneeded "$gdir/bin/spartanport-probe" "$gdir/bin/spartanport-launcher" 2>/dev/null || true
-    # AppRun / desktop / 图标
+    cp -R "$xkb_src" "$gdir/usr/share/X11/xkb"
+    install -m644 patches/CUSA01623.xml "$gdir/usr/share/spartanport/patches/"
+    # AppRun（上游模型 + 我们的键表路径）：设置写到 ~/.local/share/spartanport（可写）
     cat > "$gdir/AppRun" <<'APPRUN'
 #!/bin/sh
-here=$(dirname "$(readlink -f "$0")")
-export LD_LIBRARY_PATH="$here/lib:${LD_LIBRARY_PATH:-}"
-export XKB_CONFIG_ROOT="$here/share/X11/xkb"
-exec "$here/bin/spartanport-launcher" "$@"
+set -euo pipefail
+here=$(dirname -- "$(readlink -f -- "$0")")
+share=$here/usr/share/spartanport
+export LD_LIBRARY_PATH="$here/usr/lib:${LD_LIBRARY_PATH:-}"
+export XKB_CONFIG_ROOT="$here/usr/share/X11/xkb"
+export SPARTAN_DATA_DIR=${SPARTAN_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/spartanport}
+export SPARTAN_USER_DIR=${SPARTAN_USER_DIR:-$SPARTAN_DATA_DIR/user}
+mkdir -p "$SPARTAN_DATA_DIR" "$SPARTAN_USER_DIR"
+cd -- "$share"
+exec "$share/spartanport-launcher" "$@"
 APPRUN
     chmod 755 "$gdir/AppRun"
     install -m644 launcher/spartanport.png "$gdir/spartanport.png"

@@ -590,9 +590,11 @@ fn browse(state: &State, key: String) -> Task<Message> {
         current if current.is_empty() => state.paths.port_dir.clone(),
         current => PathBuf::from(current),
     };
-    // gport: nixport 会话里走宿主的应用内选择屏（触屏横屏，spec 文件选择.md）；
-    // 总线不可用（PC / 未支持的宿主版本）回退 rfd 对话框——与上游行为一致。
+    // gport: nixport 会话里走宿主的应用内选择屏（触屏横屏，spec 文件选择.md）。
+    // 判据只有一个：NXP_HOST_SOCKET 存在 ⇒ nixport（宿主选择屏）；否则走上游 rfd
+    // 逻辑（PC 与通用 Linux 与上游 PC 行为一致）。
     if crate::core::nixport::available() {
+        let start = start.clone();
         return blocking(move || {
             let picked = crate::core::nixport::pick_dir(&start);
             Message::Browsed(key.clone(), picked)

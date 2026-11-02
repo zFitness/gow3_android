@@ -43,7 +43,14 @@ if [ "${SPARTAN_BAKE_INTERPRETER:-1}" = 1 ]; then
     export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,--dynamic-linker=$rootfs_prefix/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
 fi
 
-cargo build --release --target aarch64-unknown-linux-gnu --bin spartanport-launcher
+# gport: SPARTAN_LAUNCHER_NO_WGPU=1 ⇒ tiny-skia-only（gamescope/DroidDeck 的 WSI
+# 兼容层在 wgpu 建 instance 时断言崩溃，2026-11-02 设备实测）；缺省带 wgpu。
+cargo_feature_args=""
+if [ "${SPARTAN_LAUNCHER_NO_WGPU:-0}" = 1 ]; then
+    cargo_feature_args="--no-default-features"
+fi
+
+cargo build --release --target aarch64-unknown-linux-gnu $cargo_feature_args --bin spartanport-launcher
 "$llvm_bin/llvm-strip" --strip-unneeded \
     "target/aarch64-unknown-linux-gnu/release/spartanport-launcher"
 ls -la "target/aarch64-unknown-linux-gnu/release/spartanport-launcher"
