@@ -23,7 +23,7 @@ use crate::core::installation::Installation;
 use crate::core::mods::{
     apply_preset, conflicts, discover, mod_files, mod_info, patch_files, ModInfo,
 };
-use crate::core::patches::{builtin_xml, external_enabled, external_patches, PatchMeta};
+use crate::core::patches::{builtin_xml_for, external_enabled, external_patches, PatchMeta};
 use crate::core::paths::Paths;
 use crate::core::settings::Settings;
 use crate::core::store::Store;
@@ -188,7 +188,7 @@ fn read(paths: &Paths, settings: &Settings, installation: &Installation) -> Mods
         view.external = external_patches(
             &paths.patches_dir(&settings.get_str("patches_dir")),
             profile.app_version,
-            &builtin_xml(paths, profile),
+            &builtin_xml_for(paths, profile, installation.title_id()),
             profile.ids,
         );
         let chosen: Value = load_json(&paths.patches_json(), Value::Null);

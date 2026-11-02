@@ -33,6 +33,11 @@ export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=clang
 export RUSTFLAGS="-C link-arg=--target=aarch64-linux-gnu -C link-arg=--sysroot=$sysroot -C link-arg=-fuse-ld=lld -C link-arg=-L$sysroot/usr/lib/aarch64-linux-gnu"
 export CC_aarch64_unknown_linux_gnu=clang AR_aarch64_unknown_linux_gnu=llvm-ar
 export CFLAGS_aarch64_unknown_linux_gnu="--sysroot=$sysroot"
+# gport: 烤入 ELF 解释器路径（Android 没有 /lib）——启动器会被直接 exec，且它 PLAY 时
+# 会「自重执行 <exe> --run」进内置 runner，argv[0]/exe 必须是可直接运行的自己。
+# 与 spartanport-probe 的同款处理（build.sh 的 -Wl,--dynamic-linker）。
+rootfs_prefix=${SPARTAN_ROOTFS_PREFIX:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}
+export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,--dynamic-linker=$rootfs_prefix/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
 
 cargo build --release --target aarch64-unknown-linux-gnu --bin spartanport-launcher
 "$llvm_bin/llvm-strip" --strip-unneeded \

@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::options::{AUDIO_CHANNELS, LANGUAGES};
-use crate::core::patches::{builtin_xml, game_patch_metas, selectable, PatchMeta};
+use crate::core::patches::{builtin_xml_for, game_patch_metas, selectable, PatchMeta};
 use crate::core::save_backup::{list_backups, restore, KEEP};
 use crate::core::settings::mark_default_patches_offered;
 use crate::ui::app::{Message, State};
@@ -201,7 +201,7 @@ pub(crate) fn refresh_game_patches(state: &mut State) {
         state.patches = PatchesView::default();
         return;
     };
-    let xml = builtin_xml(&state.paths, profile);
+    let xml = builtin_xml_for(&state.paths, profile, Some(title_id.as_str()));
     let metas = game_patch_metas(&xml, profile.app_version).unwrap_or_default();
     let chosen = saved_choice(state, &title_id).unwrap_or_else(|| {
         metas

@@ -66,7 +66,33 @@ pub struct PatchStatus {
 
 /// The built-in patch file of a game profile.
 pub fn builtin_xml(paths: &Paths, profile: &GameProfile) -> PathBuf {
-    paths.port_dir.join("patches").join(profile.xml)
+    builtin_xml_for(paths, profile, None)
+}
+
+/// gport: 端口线的补丁按 title 分文件（`God_of_War_III_Remastered_<title id>.xml`，
+/// 每份的条目都在那个构建上校验过）⇒ 有真实 title id 时优先用对应文件，
+/// 没有再落回上游的单文件布局（`profile.xml` = CUSA01623.xml）。
+pub fn builtin_xml_for(paths: &Paths, profile: &GameProfile, title_id: Option<&str>) -> PathBuf {
+    title_aware_xml(&paths.port_dir.join("patches"), Some(profile), title_id)
+}
+
+/// 同 [`builtin_xml_for`]，但调用方手里是 patches 目录而不是 Paths。
+fn title_aware_xml(
+    patches_dir: &std::path::Path,
+    profile: Option<&GameProfile>,
+    title_id: Option<&str>,
+) -> PathBuf {
+    if let Some(id) = title_id {
+        let per_title = patches_dir.join(format!("God_of_War_III_Remastered_{id}.xml"));
+        if per_title.is_file() {
+            return per_title;
+        }
+    }
+    let fallback = match profile {
+        Some(p) => p.xml,
+        None => "CUSA01623.xml",
+    };
+    patches_dir.join(fallback)
 }
 
 /// Parses a patch file. One nested deeper than [`MAX_DEPTH`] is refused first: roxmltree's
@@ -1623,6 +1649,8 @@ pub fn plan(input: &PlanInput, log: &mut dyn io::Write) -> Result<PatchPlan, Pat
         title_id,
         app_version,
     } = facts(input.game);
+    // gport: 按 title 优先取端口线的 per-title 补丁文件（要先于 title_id 的 move）
+    let mut xml = title_aware_xml(&input.builtin_dir, profile, title_id.as_deref());
     let mut plan = PatchPlan {
         profiled: None,
         title_id,
@@ -1640,7 +1668,6 @@ pub fn plan(input: &PlanInput, log: &mut dyn io::Write) -> Result<PatchPlan, Pat
         return Ok(plan);
     };
     plan.sha256 = eboot_sha256(input.game);
-    let mut xml = input.builtin_dir.join(profile.xml);
     if !input.mod_patches.is_empty() {
         let merged = input.out.join("patches-merged.xml");
         merge_patch_files(&xml, input.mod_patches, &merged, log)?;

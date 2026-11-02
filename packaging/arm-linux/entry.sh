@@ -127,8 +127,10 @@ launcher)
         # gport: 会话里没有 /usr 映射，xkbcommon 的默认键表路径要显式指到 rootfs
         # （键表数据 = nixport-rootfs 的 xkb-data 包）。
         export XKB_CONFIG_ROOT="$HOST/usr/share/X11/xkb"
-        exec "$LOADER" --library-path "$TREE/lib:$HOST/usr/lib/aarch64-linux-gnu:$HOST/usr/lib" \
-            "$BIN/spartanport-launcher-rust" 2>> "$DATA/logs/launch.log"
+        # gport: 直接 exec（二进制已烤入解释器路径）——启动器 PLAY 会「自重执行
+        # <exe> --run」进内置 runner，不能经 loader 启动（argv[0] 会变成 loader）。
+        export LD_LIBRARY_PATH="$TREE/lib:$HOST/usr/lib/aarch64-linux-gnu:$HOST/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        exec "$BIN/spartanport-launcher-rust" 2>> "$DATA/logs/launch.log"
     fi
     py_exec "$TREE/launcher/spartanport_launcher_win.py" 2>> "$DATA/logs/launch.log"
     ;;
