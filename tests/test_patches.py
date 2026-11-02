@@ -105,9 +105,10 @@ class GameProfileTests(unittest.TestCase):
     def test_gow3_defaults_and_extras(self):
         self.assertEqual(selected_patches(GOW3, '01.02', ''),
                          ['Bug Fix - Texture Corruption Fix', 'High FPS Wall Seam Fix',
-                          'Skip Any Video With X Button', STARTUP])
+                          'Skip Any Video With X Button', STARTUP, 'Disable SSAO', 'Disable Soft Particles'])
         self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 720p; Skip Any Video With X Button'),
-                         ['High FPS Wall Seam Fix', 'Skip Any Video With X Button', STARTUP, 'Resolution Patch - 720p'])
+                         ['High FPS Wall Seam Fix', 'Skip Any Video With X Button', STARTUP,
+                          'Disable SSAO', 'Disable Soft Particles', 'Resolution Patch - 720p'])
         self.assertEqual(selected_patches(GOW3, '01.00', ''), [])
         # The launcher's selection is exact: unchecked defaults stay off.
         self.assertEqual(selected_patches(GOW3, '01.02', 'Skip Any Video With X Button', only=True), ['Skip Any Video With X Button', STARTUP])
@@ -116,10 +117,10 @@ class GameProfileTests(unittest.TestCase):
     def test_spartanport_defaults_and_extras(self):
         self.assertEqual(selected_patches(SPARTAN, '01.02', ''),
                          ['Bug Fix - Texture Corruption Fix', 'High FPS Wall Seam Fix', 'Skip Any Video With X Button',
-                          'Bug Fix - Startup Black Screen'])
+                          'Bug Fix - Startup Black Screen', 'Disable SSAO', 'Disable Soft Particles'])
         self.assertEqual(selected_patches(SPARTAN, '01.02', 'Resolution Patch - 720p; Skip Any Video With X Button'),
                          ['High FPS Wall Seam Fix', 'Skip Any Video With X Button', 'Bug Fix - Startup Black Screen',
-                          'Resolution Patch - 720p'])
+                          'Disable SSAO', 'Disable Soft Particles', 'Resolution Patch - 720p'])
         self.assertEqual(selected_patches(SPARTAN, '01.00', ''), [])
         # The launcher's selection is exact: unchecked defaults stay off, except the fixes that are
         # always on (a list saved before they existed must still get them).
@@ -131,7 +132,7 @@ class GameProfileTests(unittest.TestCase):
     def test_spartanport_resolution_patch_replaces_texture_fix(self):
         self.assertEqual(selected_patches(SPARTAN, '01.02', 'Resolution Patch - 4K'),
                          ['High FPS Wall Seam Fix', 'Skip Any Video With X Button', 'Bug Fix - Startup Black Screen',
-                          'Resolution Patch - 4K'])
+                          'Disable SSAO', 'Disable Soft Particles', 'Resolution Patch - 4K'])
         with self.assertRaises(ValueError):
             selected_patches(GOW3, '01.02', 'Resolution Patch - 4K;Resolution Patch - 720p')
 

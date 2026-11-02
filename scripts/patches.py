@@ -348,10 +348,12 @@ REPLACED_BY_EXCLUSIVE={'Bug Fix - Texture Corruption Fix'}
 ALWAYS_ON={'Bug Fix - Startup Black Screen'}
 
 # gport: 安卓增量——设备线（ARM 构建）默认勾选的去特效补丁。移动端 GPU 预算有限，桌面缺省
-# 不含它们，SSAO / 景深 / 泛光 / 软粒子 / 动态阴影在手机上都是纯开销。
+# 不含它们，SSAO / 软粒子在手机上都是纯开销。
 # 名字与 patches/*.xml 的 Metadata Name 一致；XML 里没有的名字会被忽略（不同游戏版本）。
-DEVICE_DEFAULT_PATCHES = ('Disable SSAO', 'Disable Motion Blur', 'Disable Depth of Field',
-                          'Disable Bloom', 'Disable Soft Particles', 'Disable Dynamic Shadows')
+# 2026-11-02：Motion Blur / Depth of Field / Bloom / Dynamic Shadows 四个改为由游戏内
+# Options > Graphics 开关实时控制（FEX 钩子，d1b75de2），不再默认勾选静态补丁——
+# 静态补丁会覆盖开关（另一个位点的永久禁用），两者同开会让开关失效。
+DEVICE_DEFAULT_PATCHES = ('Disable SSAO', 'Disable Soft Particles')
 
 
 def device_default_patches(metas):

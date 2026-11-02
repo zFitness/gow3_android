@@ -651,40 +651,15 @@
             <Line Type="bytes" Address="0x007cd918" Value="00000090" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8" />
         </PatchList>
     </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Disable SSAO" Note="Experimental, untested import from Plus 0.2.2 for v01.02. Intended to disable ambient occlusion; changes visual quality. Not the renderer whitening fix." Author="erickmendes22" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false" Validation="pending-title-sample">
+    <Metadata Title="God of War III Remastered" Name="Disable SSAO" Note="Experimental, untested import from Plus 0.2.2 for v01.02. Intended to disable ambient occlusion; changes visual quality. Not the renderer whitening fix." Author="erickmendes22" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true" Validation="pending-title-sample">
         <PatchList>
             <Line Type="bytes" Address="0x0060b188" Value="e9{rel:ssao_end:0}90" Pattern="48 8b 01 48 89 45 d0 48 85 f6 0f 85 ?? ?? ?? ?? 66 c7 85 a4 fd ff ff 00 00" At="10" />
         </PatchList>
         <Target Name="ssao_end" Address="0x0060bfb7" Pattern="48 8b 01 48 89 45 d0 48 85 f6 0f 85 ?? ?? ?? ?? 66 c7 85 a4 fd ff ff 00 00" At="12" Ref="1" Tail="0" />
     </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Disable Motion Blur" Note="Experimental, untested import from Plus 0.2.2 for v01.02. Intended to disable motion blur; changes visual quality." Author="erickmendes22" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false" Validation="pending-title-sample">
-        <PatchList>
-            <Line Type="bytes" Address="0x004f1130" Value="c5f857c09090" Pattern="4c 8d 6b d0 c4 c1 7a 10 47 0c c5 fa 11 45 d4" At="4" />
-            <Line Type="bytes" Address="0x004f1180" Value="c5f857c09090" Pattern="c4 c1 7a 10 47 0c c5 fa 11 83 a4 01 00 00 48 8b 1b" At="0" />
-        </PatchList>
-    </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Disable Depth of Field" Note="Experimental, untested import from Plus 0.2.2 for v01.02. Intended to disable depth of field; changes visual quality." Author="erickmendes22" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false" Validation="pending-title-sample">
-        <PatchList>
-            <Line Type="bytes" Address="0x005673bd" Value="c5f857c09090" Pattern="c5 fa 10 6d e4 c4 c1 7a 10 47 48 c4 c1 7a 10 4f 44" At="5" />
-            <Line Type="bytes" Address="0x005673cf" Value="c5e057db9090" Pattern="c4 c1 7a 10 4f 44 c4 c1 7a 10 57 3c c4 c1 7a 10 5f 40 c5 da 58 e4" At="12" />
-        </PatchList>
-    </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Disable Bloom" Note="Experimental, untested import from Plus 0.2.2 for v01.02. Intended to disable bloom; changes brightness and visual quality. Not the renderer whitening fix." Author="erickmendes22" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false" Validation="pending-title-sample">
-        <PatchList>
-            <Line Type="bytes" Address="0x0047f3a3" Value="c5e857d2909090909090" Pattern="c4 c1 7a 10 94 24 80 04 00 00 c4 c1 7a 10 9c 24 84 04 00 00" At="0" />
-            <Line Type="bytes" Address="0x0047f3ad" Value="c5e057db909090909090" Pattern="c4 c1 7a 10 94 24 80 04 00 00 c4 c1 7a 10 9c 24 84 04 00 00" At="10" />
-            <Line Type="bytes" Address="0x004971d2" Value="c5f057c99090909090" Pattern="c4 c1 7a 10 8f 80 04 00 00 c4 c1 7a 10 97 84 04 00 00" At="0" />
-            <Line Type="bytes" Address="0x004971db" Value="c5e857d29090909090" Pattern="c4 c1 7a 10 8f 80 04 00 00 c4 c1 7a 10 97 84 04 00 00" At="9" />
-        </PatchList>
-    </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Disable Soft Particles" Note="Experimental, untested import from Plus 0.2.2 for v01.02. Intended to disable soft-particle rendering; changes visual quality." Author="erickmendes22" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false" Validation="pending-title-sample">
+    <Metadata Title="God of War III Remastered" Name="Disable Soft Particles" Note="Experimental, untested import from Plus 0.2.2 for v01.02. Intended to disable soft-particle rendering; changes visual quality." Author="erickmendes22" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true" Validation="pending-title-sample">
         <PatchList>
             <Line Type="bytes" Address="0x0059d9af" Value="b00090" Pattern="c5 f8 57 c0 c5 f8 2e 00 0f 95 c0 eb 06 31 c0 eb 02 31 c0 45 84 ed" At="8" />
-        </PatchList>
-    </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Disable Dynamic Shadows" Note="Experimental, untested import from Plus 0.2.2 for v01.02. Intended to disable dynamic shadows; changes visual quality." Author="erickmendes22" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false" Validation="pending-title-sample">
-        <PatchList>
-            <Line Type="bytes" Address="0x005b739b" Value="eb32" Pattern="48 89 45 d8 83 bb 80 01 00 00 00 74 32 4c 8d 7d a8 48 89 f7 4c 89 fe" At="11" />
         </PatchList>
     </Metadata>
 </Patch>
