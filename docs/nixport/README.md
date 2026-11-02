@@ -6,6 +6,7 @@
 | 篇 | 内容 |
 |---|---|
 | [01 排查手册](01-debug-playbook.md) | 日志在哪、怎么抓现场、A/B 开关、事故模式速查表 |
+| [02 依赖三层模型](02-dependency-model.md) | 为什么“提供了 sysroot 还缺库”：自动打包/dlopen 隐藏依赖/排除清单/rootfs 四层各自兜什么 |
 | [2026-11-01 未授权发布 release](../incidents/2026-11-01-未授权发布-release.md) | 事故复盘 + 发布规则 R1–R6（也见 [发布策略](../port/release-policy.md)） |
 
 ## 一页速用（赶时间只看这段）
