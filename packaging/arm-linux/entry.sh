@@ -124,6 +124,9 @@ launcher)
     _cfg_launcher=$(_cfg launcher) || _cfg_launcher=""
     if [ "${SPARTAN_RUST_LAUNCHER:-$_cfg_launcher}" = "rust" ] && [ -x "$BIN/spartanport-launcher-rust" ]; then
         echo "launcher: starting the RUST launcher" >> "$DATA/logs/launch.log" 2>&1 || true
+        # gport: 会话里没有 /usr 映射，xkbcommon 的默认键表路径要显式指到 rootfs
+        # （键表数据 = nixport-rootfs 的 xkb-data 包）。
+        export XKB_CONFIG_ROOT="$HOST/usr/share/X11/xkb"
         exec "$LOADER" --library-path "$TREE/lib:$HOST/usr/lib/aarch64-linux-gnu:$HOST/usr/lib" \
             "$BIN/spartanport-launcher-rust" 2>> "$DATA/logs/launch.log"
     fi
