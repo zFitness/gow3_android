@@ -998,6 +998,11 @@ fn window_settings() -> window::Settings {
             application_id: "spartanport".to_string(),
             ..Default::default()
         },
+        // gport: nixport 设备会话里全屏创建、一次到位——宿主显示桥（libfxdisplay 的
+        // FrameGen::onResize）在窗口 resize 时会崩在 Adreno 闭源驱动里，杀掉整个会话
+        // （2026-11-02 设备实测，tombstone 栈：vkDestroyImage ← onResize ← fgb_prepare）。
+        // 1280x800 的默认尺寸在 1152x720 的会话屏上必触发一次 resize。桌面构建不受影响。
+        fullscreen: cfg!(all(target_os = "linux", target_arch = "aarch64")),
         ..window::Settings::default()
     }
 }

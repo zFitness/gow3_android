@@ -16,9 +16,8 @@ from pathlib import Path
 from patches import (compile_patches, external_patches, external_selection, compile_external,
                      game_profile, selected_patches, patch_profile_status, patch_requirements, compile_plan, publish_plan)
 
-GOW3 = ROOT / 'patches/God_of_War_III_Remastered_CUSA01623.xml'
-# gport: 上游的补丁集在 patches/CUSA01623.xml，我们按 title 拆成了 per-title 文件
-# （God_of_War_III_Remastered_<title id>.xml）⇒ 上游测试里的 SPARTAN 指向同一款游戏的我们那份。
+GOW3 = ROOT / 'patches/CUSA01623.xml'
+# gport: 补丁布局回归上游单文件（patches/CUSA01623.xml，TitleID 列出全部四个区域版本）。
 SPARTAN = GOW3
 SPARTAN_IDS = {'CUSA01623'}
 SEGMENTS = [(0, 0x6000000)]
@@ -146,7 +145,9 @@ class GameProfileTests(unittest.TestCase):
                 self.assertIsNone(status['eboot_matches'])
             game, _ = make_game(directory, version='01.00')
             self.assertEqual(patch_profile_status(game)['reason'], 'unsupported-app-version')
-            self.assertEqual(game_profile('CUSA01740', 'God of War III')[2], '01.00')
+            # gport: 单文件布局只携带 01.02（上游语义：社区补丁面向 01.02 的 dump；
+            # 01.00 的 dump 由身份门禁以 unsupported-app-version 拒绝）。
+            self.assertEqual(game_profile('CUSA01740', 'God of War III')[2], '01.02')
 
     def test_android_cusa01740_requires_metadata_and_explicit_720p(self):
         # 1740 按明确身份和版本选择，不凭目录名猜测或默认开启补丁。

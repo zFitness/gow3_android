@@ -242,7 +242,7 @@ def main():
     p.add_argument('width', type=int)
     p.add_argument('height', type=int)
     p.add_argument('--mod', type=Path, help='the mod\'s patch file to write (or to rebase with --rebase)')
-    p.add_argument('--xml', type=Path, default=Path(__file__).resolve().parent.parent / 'patches/God_of_War_III_Remastered_CUSA01623.xml',
+    p.add_argument('--xml', type=Path, default=Path(__file__).resolve().parent.parent / 'patches/CUSA01623.xml',
                    help='the built-in patch file (the render resolution sites)')
     p.add_argument('--rebase', action='store_true')
     p.add_argument('--fov', type=float, default=None,

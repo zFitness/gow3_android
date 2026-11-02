@@ -33,8 +33,7 @@ class PortugueseTest(unittest.TestCase):
         self.assertEqual(sorted(missing), [])
 
     def test_the_built_in_patch_notes_are_translated(self):
-        # gport: our patch set is per title id; the CUSA01623 file is the one upstream's single file became.
-        root = ET.parse(ROOT / 'patches' / 'God_of_War_III_Remastered_CUSA01623.xml').getroot()
+        root = ET.parse(ROOT / 'patches' / 'CUSA01623.xml').getroot()
         notes = {m.get('Note') for m in root.iter('Metadata')
                  if not m.get('Name').startswith(('Resolution Patch', 'Frame Rate Patch'))}
         self.assertEqual(sorted(n for n in notes if n not in self.pt), [])

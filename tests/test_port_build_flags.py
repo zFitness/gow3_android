@@ -143,7 +143,7 @@ class DevicePatchesTest(unittest.TestCase):
             self.assertIn('Skip Any Video With X Button', names)
 
     def test_the_effect_patches_exist_in_the_built_in_files(self):
-        for path in sorted((ROOT / 'patches').glob('God_of_War_III_Remastered_CUSA*.xml')):
+        for path in sorted((ROOT / 'patches').glob('CUSA01623.xml')):
             text = path.read_text(encoding='utf-8')
             for name in patches.DEVICE_DEFAULT_PATCHES:
                 self.assertIn(f'Name="{name}"', text, path.name)
@@ -181,13 +181,13 @@ class DeviceResolutionsTest(unittest.TestCase):
         self.assertNotIn(graphics_options.TEXTURE_FIX, names)
 
     def test_the_built_in_patches_have_them(self):
-        for path in sorted((ROOT / 'patches').glob('God_of_War_III_Remastered_CUSA*.xml')):
+        for path in sorted((ROOT / 'patches').glob('CUSA01623.xml')):
             text = path.read_text(encoding='utf-8')
             self.assertIn('Name="Resolution Patch - 540p"', text, path.name)
             self.assertIn('Name="Resolution Patch - 1080p"', text, path.name)
 
     def test_the_device_resolution_reserves_its_memory(self):
-        xml = str(ROOT / 'patches' / 'God_of_War_III_Remastered_CUSA01740.xml')
+        xml = str(ROOT / 'patches' / 'CUSA01623.xml')
         dmem, _vblank = patches.patch_requirements(xml, ['Resolution Patch - 540p'], '01.02')
         self.assertEqual(dmem, patches.DMEM_RETAIL_MB + 2048)
 

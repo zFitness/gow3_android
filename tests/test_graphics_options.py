@@ -227,7 +227,7 @@ class GraphicsOptionsTest(unittest.TestCase):
 
     def test_every_built_in_resolution_has_a_patch(self):
         import patches
-        xml = Path(__file__).resolve().parent.parent / 'patches' / 'God_of_War_III_Remastered_CUSA01623.xml'
+        xml = Path(__file__).resolve().parent.parent / 'patches' / 'CUSA01623.xml'
         names = set(patches.resolution_names([xml]))
         built = {r for r in g.RESOLUTIONS if r != 'native'}
         # Every built-in size has its patch ...
@@ -241,7 +241,7 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertEqual(g.RESOLUTIONS.index('900p'), 3)
         self.assertEqual(g.SIZES['900p'], (1600, 900))
         import xml.etree.ElementTree as ET
-        xml = Path(__file__).resolve().parent.parent / 'patches' / 'God_of_War_III_Remastered_CUSA01623.xml'
+        xml = Path(__file__).resolve().parent.parent / 'patches' / 'CUSA01623.xml'
         names = {m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')}
         self.assertIn('Resolution Patch - 900p', names)
 
@@ -454,7 +454,7 @@ class SteamDeckTest(unittest.TestCase):
         self.assertIsNone(g.upscaler_render_size({**ini, 'upscaler': 'off'}, on))
 
     def test_resolution_patch_for_any_size_matches_the_built_in_ones(self):
-        builtin = (Path(__file__).resolve().parents[1] / 'patches' / 'God_of_War_III_Remastered_CUSA01623.xml').read_text(encoding='utf-8')
+        builtin = (Path(__file__).resolve().parents[1] / 'patches' / 'CUSA01623.xml').read_text(encoding='utf-8')
         lines = lambda text: re.findall(r'<Line [^>]*/>', text)
         for name, size in (('720p', (1280, 720)), ('1440p', (2560, 1440)), ('4K', (3840, 2160)),
                            ('8K', (7680, 4320))):
