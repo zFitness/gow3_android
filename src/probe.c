@@ -1136,56 +1136,6 @@ static void install_stat_multipliers_fex(Segment *segments, uint64_t count, uint
            pickup ? "ready" : "unavailable");
 }
 
-/* 图形三开关（Options > Graphics：Shadows / Motion Blur / Bloom）的 JIT 路径：三个位点
- * 都是函数序言/比较指令，stub 语义与 native 版（graphics_hook.h 的 stub 构造器）完全
- * 一致——开关关时跳过对应 pass、开时重放原始指令——只是安装机制换成陷阱+重定向。
- * stub 读宿主侧的设置标志（与其他 FEX stub 同机制：堆保持在 1TiB 内，guest 可见）。 */
-static void install_graphics_fex(Segment *segments, uint64_t count, uint64_t size) {
-    extern uintptr_t spartanport_graphics_flag(unsigned id);
-    extern void spartanport_graphics_status(unsigned id);
-    const uint64_t blur_at = spartanport_signature_find(image, size, &spartanport_motion_blur_site);
-    const uint64_t bloom_at = spartanport_signature_find(image, size, &spartanport_bloom_site);
-    const uint64_t shadows_at = spartanport_signature_find(image, size, &spartanport_shadows_site);
-    /* Same prologue bytes as the motion blur site. */
-    int shadows = shadows_at != UINT64_MAX && mapped(segments, count, shadows_at, SPARTAN_SHADOWS_HOOK_LENGTH) &&
-                  spartanport_motion_blur_signature_match(image + shadows_at, size - shadows_at);
-    int blur = blur_at != UINT64_MAX && mapped(segments, count, blur_at, 48) &&
-               spartanport_motion_blur_signature_match(image + blur_at, size - blur_at);
-    int bloom = bloom_at != UINT64_MAX && mapped(segments, count, bloom_at, SPARTAN_BLOOM_HOOK_LENGTH) &&
-                spartanport_bloom_signature_match(image + bloom_at, size - bloom_at);
-    uint64_t gate = 0, queued = 0;
-    if (blur) {
-        gate = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_GATE);
-        queued = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_QUEUED);
-        blur = mapped(segments, count, gate, 4) && mapped(segments, count, queued, 4);
-    }
-    if (!blur && !bloom && !shadows) {
-        puts("FEX Graphics: bloom, motion blur and shadows toggles unavailable (code not found in this eboot.bin)");
-        return;
-    }
-    unsigned char *stubs = allocate(page_size);
-    if (blur)
-        spartanport_motion_blur_build_stub(stubs, spartanport_graphics_flag(SPARTAN_GRAPHICS_MOTION_BLUR),
-                                           (uintptr_t)(image + gate), (uintptr_t)(image + queued),
-                                           (uintptr_t)(image + blur_at + SPARTAN_MOTION_BLUR_HOOK_LENGTH));
-    if (bloom)
-        spartanport_bloom_build_stub(stubs + 256, spartanport_graphics_flag(SPARTAN_GRAPHICS_BLOOM),
-                                     (uintptr_t)(image + bloom_at + SPARTAN_BLOOM_HOOK_LENGTH));
-    if (shadows)
-        spartanport_shadows_build_stub(stubs + 768, spartanport_graphics_flag(SPARTAN_GRAPHICS_SHADOWS),
-                                       (uintptr_t)(image + shadows_at + SPARTAN_SHADOWS_HOOK_LENGTH));
-    protect(stubs, page_size, 5);
-    gport_guest_cpu_code((uintptr_t)stubs, page_size);
-    if (blur) blur = trap_redirect_add((uintptr_t)(image + blur_at), (uintptr_t)stubs);
-    if (bloom) bloom = trap_redirect_add((uintptr_t)(image + bloom_at), (uintptr_t)(stubs + 256));
-    if (shadows) shadows = trap_redirect_add((uintptr_t)(image + shadows_at), (uintptr_t)(stubs + 768));
-    if (blur) spartanport_graphics_status(SPARTAN_GRAPHICS_MOTION_BLUR);
-    if (bloom) spartanport_graphics_status(SPARTAN_GRAPHICS_BLOOM);
-    if (shadows) spartanport_graphics_status(SPARTAN_GRAPHICS_SHADOWS);
-    printf("FEX Graphics: bloom toggle %s, motion blur toggle %s, shadows toggle %s\n",
-           bloom ? "ready" : "unavailable", blur ? "ready" : "unavailable", shadows ? "ready" : "unavailable");
-}
-
 /* 红球倍率（src/orb_hook.h）的 JIT 路径：三个位点是函数体内的 call（不是序言）——陷阱替掉 call
  * 的头两个字节后栈上没有返回地址，所以 stub 用 orb_hook.h 里的 FEX 变体：自己压一个返回地址给
  * 游戏原函数 ret，并把 SysV 的对齐补齐。helper 是宿主函数，地址要用 guest 可调用的蹦床。 */
@@ -1645,7 +1595,6 @@ if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     /* 敌血条、伤害/球倍率、红球倍率：位点走陷阱路径（stub 读宿主侧的菜单设置与计数）。 */
     if (gpu_enabled) install_actor_watch_fex(segments, ns, size);
     if (gpu_enabled) install_stat_multipliers_fex(segments, ns, size);
-    if (gpu_enabled) install_graphics_fex(segments, ns, size);
     if (gpu_enabled) install_orb_multiplier_fex(segments, ns, size);
     /* 暂停菜单的 Exit to Desktop：位点走陷阱路径，WAD 由安装器在钩子装好后挂上。 */
     if (gpu_enabled && pause_menu_wad && app0) install_menu_exit_fex(segments, ns, size, pause_menu_wad);
