@@ -37,7 +37,11 @@ export CFLAGS_aarch64_unknown_linux_gnu="--sysroot=$sysroot"
 # 会「自重执行 <exe> --run」进内置 runner，argv[0]/exe 必须是可直接运行的自己。
 # 与 spartanport-probe 的同款处理（build.sh 的 -Wl,--dynamic-linker）。
 rootfs_prefix=${SPARTAN_ROOTFS_PREFIX:-/data/user/0/ro.cobrabm.fexdroid/files/rootfs}
-export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,--dynamic-linker=$rootfs_prefix/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
+# gport: SPARTAN_BAKE_INTERPRETER=0 ⇒ 不烤入（通用 Linux AppImage 变体用标准
+# /lib/ld-linux-aarch64.so.1 解释器）；缺省烤入（nixport 端口变体，Android 无 /lib）。
+if [ "${SPARTAN_BAKE_INTERPRETER:-1}" = 1 ]; then
+    export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,--dynamic-linker=$rootfs_prefix/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
+fi
 
 cargo build --release --target aarch64-unknown-linux-gnu --bin spartanport-launcher
 "$llvm_bin/llvm-strip" --strip-unneeded \

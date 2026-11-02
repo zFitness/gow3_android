@@ -64,6 +64,8 @@ jobs:
           GPORT_DEBIAN_MIRROR: https://deb.debian.org/debian
           SPARTAN_ARM64_HEADERS: ${{ github.workspace }}/.local-deps/root/usr
           SPARTAN_HOST_TOOLS: ${{ github.workspace }}/fexdroid
+          # 同时产出通用 ARM64 Linux AppImage（非 nixport 专属）
+          SPARTAN_GENERIC_APPIMAGE: '1'
         run: bash packaging/arm-linux/build.sh
 
       - name: Name and checksum
@@ -82,6 +84,12 @@ jobs:
           path: |
             dist/SpartanPort.nixport.*.zip
             dist/SpartanPort.nixport.*.zip.sha256
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SpartanPort-linux-arm64.AppImage
+          path: out/arm64-linux/pkg/SpartanPort-arm64.AppImage
           if-no-files-found: error
 
       - name: Release

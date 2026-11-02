@@ -338,4 +338,67 @@ if names[:2] != expected or any(n not in expected and n != 'virtualkeys.json' fo
 PY
 end_stage "$dist/spartanport-port.zip ($(du -m "$dist/spartanport-port.zip" | cut -f1) MB)"
 
+# ---- 6/6 通用 ARM64 Linux AppImage（可选：SPARTAN_GENERIC_APPIMAGE=1）------------
+# 面向普通 aarch64 Linux（桌面发行版，非 nixport）：标准 /lib 解释器、自带 SDL3/ffmpeg/
+# libgport 库、依赖目标系统的 glibc(≥2.41)/X11/xkb 栈。入口 = Rust 启动器（上游模型）。
+if [[ ${SPARTAN_GENERIC_APPIMAGE:-0} = 1 ]]; then
+    begin "generic arm64 AppImage (optional)"
+    gdir=$out/pkg-generic/spartanport
+    rm -rf "$out/pkg-generic"
+    mkdir -p "$gdir/bin/gpu" "$gdir/lib" "$gdir/patches"
+    # probe 重链接：不带 nixport 解释器烤入（目标系统提供 /lib/ld-linux-aarch64.so.1）
+    "${cc[@]}" -std=c11 -O2 -g -Wall -Wextra -pthread -no-pie "${includes[@]}" -I. -Isrc \
+        src/probe.c src/runtime*.c src/vulkan_smoke.c "$out/libatrac9.a" -lm \
+        -L"$out/gpu" -lgportgpu -L"$out/fex" -lgportcpu -Wl,-rpath,'$ORIGIN/gpu' -rdynamic \
+        "${libraries[@]}" -o "$gdir/bin/spartanport-probe"
+    # Rust 启动器重链接：不烤解释器（SPARTAN_BAKE_INTERPRETER=0）
+    SPARTAN_BAKE_INTERPRETER=0 bash launcher-rust/build-aarch64.sh
+    install -m755 launcher-rust/target/aarch64-unknown-linux-gnu/release/spartanport-launcher \
+        "$gdir/bin/spartanport-launcher"
+    # 依赖闭包：复用 port 打包的 lib/（NEEDED 递归闭包，已排除 rootfs/目标系统标配）
+    cp -R "$out/lib/." "$gdir/lib/"
+    install -m755 "$out/bin/gpu/libgportgpu.so" "$out/bin/gpu/libgportcpu.so" "$gdir/bin/gpu/"
+    install -m644 patches/CUSA01623.xml "$gdir/patches/"
+    # 键表数据（xkb-data）：极简系统可能没有 ⇒ 自带 + AppRun 指路（XKB_CONFIG_ROOT）。
+    # 来源：本地缓存 .local-deps/xkb-data/（缺失时从 Debian 镜像拉一次并缓存）。
+    xkb_src=$root/.local-deps/xkb-data/usr/share/X11/xkb
+    if [[ ! -d $xkb_src ]]; then
+        xkb_tmp=$(mktemp -d)
+        curl -sfL --retry 3 -o "$xkb_tmp/xkb-data.deb" \
+            "${GPORT_DEBIAN_MIRROR:-https://deb.debian.org/debian}/pool/main/x/xkeyboard-config/xkb-data_2.42-1_all.deb"
+        (cd "$xkb_tmp" && ar x xkb-data.deb data.tar.xz && tar xJf data.tar.xz)
+        cp -R "$xkb_tmp/usr/share/X11/xkb" "$xkb_src"
+        rm -rf "$xkb_tmp"
+    fi
+    mkdir -p "$gdir/share/X11"
+    cp -R "$xkb_src" "$gdir/share/X11/xkb"
+    find "$gdir/lib" "$gdir/bin" -name '*.so*' -exec "$llvm_bin/llvm-strip" --strip-unneeded {} + 2>/dev/null || true
+    "$llvm_bin/llvm-strip" --strip-unneeded "$gdir/bin/spartanport-probe" "$gdir/bin/spartanport-launcher" 2>/dev/null || true
+    # AppRun / desktop / 图标
+    cat > "$gdir/AppRun" <<'APPRUN'
+#!/bin/sh
+here=$(dirname "$(readlink -f "$0")")
+export LD_LIBRARY_PATH="$here/lib:${LD_LIBRARY_PATH:-}"
+export XKB_CONFIG_ROOT="$here/share/X11/xkb"
+exec "$here/bin/spartanport-launcher" "$@"
+APPRUN
+    chmod 755 "$gdir/AppRun"
+    install -m644 launcher/spartanport.png "$gdir/spartanport.png"
+    ln -sf spartanport.png "$gdir/.DirIcon"
+    cat > "$gdir/spartanport.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=SpartanPort
+Exec=AppRun
+Icon=spartanport
+Categories=Game;
+DESKTOP
+    chmod 644 "$gdir/spartanport.desktop"
+    # AppImage 组装（宿主组包器；glibc 天花板 = 构建 sysroot 的 2.41）
+    NXP_MAX_GLIBC=${NXP_MAX_GLIBC:-2.41} \
+        PATH="$shim:$PATH" bash "$fexdroid_tools/scripts/build-port-appimage.sh" \
+        "$gdir" "$dist/SpartanPort-linux-arm64.AppImage"
+    end_stage "generic AppImage"
+fi
+
 printf '\nPort package ready: %s\n' "$dist/spartanport-port.zip"
